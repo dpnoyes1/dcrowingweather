@@ -1,6 +1,6 @@
 # DC Rowing Weather
 
-Static site for https://dcrowingweather.netlify.app, hosted on Netlify (project `dcrowingweather`). No build step: Netlify publishes this folder as-is. The practice status site (iswhitmanrowingtoday.com) lives in its own repo and redirects its old `/weather` links here.
+Static site for https://dcrowingweather.netlify.app, hosted on Netlify (project `dcrowingweather`). No build step: Netlify publishes this folder as-is.
 
 `index.html` shows practice weather for four locations (Upper Potomac, Lower Potomac, Anacostia, Occoquan) and three windows (Morning 5:30–7:30 AM, Afternoon 3–6 PM, Evening 5:30–7:30 PM). Links can pick both: `?loc=upper|lower|anacostia|occoquan&time=morning|afternoon|evening`. The chosen location loads first; the others' data and map tiles load in the background so switching is instant.
 
