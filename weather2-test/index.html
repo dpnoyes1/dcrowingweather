@@ -967,7 +967,7 @@
       + metric('Temperature', w ? `${Math.round(w.temp)}<span class="unit">&deg;F</span>` : DASH,
           w ? `${Math.round(w.tempFirst)}&deg; at ${hourLabel(T.start)} &rarr; ${Math.round(w.tempLast)}&deg; at ${hourLabel(T.end)}` : '')
       + metric('UV Index', w ? `${Math.round(w.uv)}` : DASH, w ? uvLabel(w.uv) : '')
-      + (light ? metric(light.label, light.time.replace(/ (AM|PM)/, '<span class="unit">$1</span>'), `${light.sub}<br>${light.note}`) : '')
+      + (light ? metric(light.label, light.time.replace(/ (AM|PM)/, '<span class="unit">$1</span>'), light.sub) : '')
       + '</div>');
 
     // Precipitation & advisories
@@ -1162,7 +1162,7 @@
         ${row('Temp', w ? `${Math.round(w.temp)}&deg;F` : DASH)}
         ${row('Precip', w ? `${Math.round(w.precipChance)}%` : DASH, w && w.precipAmount >= 0.01 ? `${w.precipAmount.toFixed(2)} in` : '')}
         ${row('UV', w ? `${Math.round(w.uv)} &middot; ${uvLabel(w.uv)}` : DASH)}
-        ${light ? row(light.label, light.time, `${light.sub} &middot; ${light.note}`) : ''}
+        ${light ? row(light.label, light.time, light.sub) : ''}
         ${row('Wind', w ? `${Math.round(w.wind)} mph` : DASH, w ? `gusts to ${Math.round(w.gust)}` : '')}
         ${row('Direction', w && w.dir != null ? `${compass(w.dir)} ${arrowSvg(w.dir)}` : DASH)}
         ${loc.tide ? row('Next tide', tide ? tide.headline : DASH, tide ? tide.flow : '') : ''}
