@@ -184,6 +184,20 @@
   .box-precip .flags { margin-top: 12px; }
   .box-precip .no-alerts { display: block; font-size: 12px; color: var(--mist); margin-top: 10px; }
 
+  /* Label / value rows under the course rating */
+  .facts { margin: 10px 0 0; }
+  .facts div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 6px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    font-size: 13px;
+  }
+  .facts dt { color: var(--mist); flex: none; }
+  .facts dd { margin: 0; color: var(--fog); font-weight: 500; text-align: right; }
+
   .box-course.is-fast { box-shadow: inset 0 3px 0 var(--go); }
   .box-course.is-slow { box-shadow: inset 0 3px 0 var(--stop); }
   .box-course.is-typical { box-shadow: inset 0 3px 0 var(--dawn); }
@@ -779,7 +793,18 @@
     const vs = secs < 1 ? 'About the same as a typical day'
       : `About ${secs} s ${diff < 0 ? 'faster' : 'slower'} than a typical ${new Date(key + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long' })} day`;
 
-    return { label, diff, vs, vsFlat, why, cls: label.toLowerCase() };
+    // Short forms for the Today box's label / value rows
+    const shortSecs = (d) => { const s = Math.round(Math.abs(d)); return s < 1 ? 'Even' : `${s} s ${d < 0 ? 'faster' : 'slower'}`; };
+    const shortText = (t) => cap(t.replace('above-normal river flow', 'high flow').replace('below-normal river flow', 'low flow'));
+    const monthShort = new Date(key + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short' });
+    const short = {
+      vsTypical: shortSecs(diff), vsFlat: shortSecs(flatDiff), month: monthShort,
+      // One factor per line, so nothing wraps mid-phrase
+      helping: parts.filter(p => p.s < 0).map(p => shortText(p.text)).join('<br>'),
+      slowing: parts.filter(p => p.s > 0).map(p => shortText(p.text)).join('<br>')
+    };
+
+    return { label, diff, vs, vsFlat, why, short, cls: label.toLowerCase() };
   }
 
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -822,9 +847,17 @@
     const box = document.getElementById('box-course');
     box.classList.remove('is-fast', 'is-slow', 'is-typical');
     if (course) box.classList.add('is-' + course.cls);
+    const fact = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
     set('box-course', '<span class="box-title">Race Course Conditions</span>'
       + metric('Downstream 2K', course ? `<span class="course ${course.cls}">${course.label}</span>` : DASH,
-          course ? `${course.vs}<br>${course.vsFlat}<br>${course.why}` : 'Needs the wind forecast'));
+          course ? '' : 'Needs the wind forecast')
+      + (course ? '<dl class="facts">'
+          + fact(`vs. typical ${course.short.month}`, course.short.vsTypical)
+          + fact('vs. flatwater', course.short.vsFlat)
+          + (course.short.helping ? fact('Helping', course.short.helping) : '')
+          + (course.short.slowing ? fact('Slowing', course.short.slowing) : '')
+          + (!course.short.helping && !course.short.slowing ? fact('Conditions', 'Close to normal') : '')
+          + '</dl>' : ''));
 
     // Tide & flow
     const riverDetail = riverNow
@@ -896,7 +929,7 @@
       ctx.globalCompositeOperation = 'source-over';
 
       const toward = (wind.dir + 180) * Math.PI / 180;     // direction the air moves
-      const speed = 0.5 + Math.min(wind.mph, 30) * 0.14;    // px per frame
+      const speed = (0.5 + Math.min(wind.mph, 30) * 0.14) * 0.75;   // px per frame (slowed 25%)
       const vx = Math.sin(toward) * speed, vy = -Math.cos(toward) * speed;
       const gustiness = Math.max(0, (wind.gust - wind.mph) / Math.max(wind.mph, 1));
 
