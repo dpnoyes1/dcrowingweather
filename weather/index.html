@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whitman Rowing Weather</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Same palette and type as the main page (index.html) */
+  :root {
+    --ink: #0b1e2d;      /* deep river navy - background */
+    --ink-2: #142b3d;    /* card panel */
+    --ink-3: #1b3549;    /* stat tile inside a card */
+    --mist: #93a9b8;     /* muted secondary text */
+    --fog: #eef2f4;      /* primary text on dark */
+    --dawn: #74b0da;     /* Whitman blue accent (Pantone 542C) */
+    --go: #00FF00;
+    --stop: #FF0000;
+    --partial: #FFA500;  /* used for storm / front flags */
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--ink);
+    color: var(--fog);
+    font-family: 'Inter', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 40px;
+  }
+
+  header { text-align: center; max-width: 480px; }
+
+  .eyebrow {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dawn);
+    margin: 0 0 6px;
+  }
+
+  h1 { font-size: 22px; font-weight: 500; margin: 0; color: var(--fog); }
+
+  .sub { font-size: 13px; color: var(--mist); margin: 6px 0 0; }
+
+  .horizon {
+    width: 100%;
+    max-width: 480px;
+    height: 2px;
+    margin: 22px 0 28px;
+    background: linear-gradient(90deg, transparent, var(--dawn), transparent);
+    background-size: 200% 100%;
+    animation: drift 6s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) { .horizon { animation: none; } }
+  @keyframes drift {
+    0%, 100% { background-position: 0% 0%; }
+    50% { background-position: 100% 0%; }
+  }
+
+  main { width: 100%; max-width: 480px; }
+
+  /* ---------- Today (main box) ---------- */
+  .today-card {
+    background: var(--ink-2);
+    border-radius: 12px;
+    border-top: 3px solid var(--dawn);
+    padding: 22px 16px 20px;
+  }
+  .today-card.has-flag { border-top-color: var(--partial); }
+
+  .card-head { text-align: center; }
+
+  .label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mist);
+  }
+
+  .date { display: block; font-size: 13px; color: var(--mist); margin-top: 2px; }
+
+  .window-note { display: block; font-size: 12px; color: var(--mist); margin-top: 4px; opacity: 0.8; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .stat {
+    background: var(--ink-3);
+    border-radius: 8px;
+    padding: 12px 12px 10px;
+    min-width: 0;
+  }
+
+  .stat-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mist);
+  }
+
+  .stat-value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Bebas Neue', 'Inter', sans-serif;
+    font-size: 34px;
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+    margin-top: 4px;
+    color: var(--fog);
+    white-space: nowrap;
+  }
+
+  .stat-value .unit { font-size: 0.55em; color: var(--mist); }
+
+  /* "HIGH 3:31 PM" is long; keep it inside a half-width phone tile */
+  .stat.wide-value .stat-value { font-size: 26px; white-space: normal; }
+
+  .stat-detail { display: block; font-size: 12px; color: var(--mist); margin-top: 2px; line-height: 1.4; }
+
+  .arrow {
+    display: inline-block;
+    width: 0.8em;
+    height: 0.8em;
+    color: var(--dawn);
+    flex: none;
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dawn);
+    border: 1px solid rgba(116, 176, 218, 0.5);
+    border-radius: 4px;
+    padding: 1px 5px;
+    vertical-align: middle;
+  }
+
+  /* Storm / front callouts */
+  .flags { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .flags:empty { display: none; }
+  .flag {
+    border-left: 3px solid var(--partial);
+    background: rgba(255, 165, 0, 0.1);
+    color: var(--fog);
+    font-size: 13px;
+    line-height: 1.45;
+    padding: 8px 12px;
+    border-radius: 0 6px 6px 0;
+  }
+  .flag strong { color: var(--partial); font-weight: 600; }
+
+  /* ---------- 5-day forecast ---------- */
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dawn);
+    text-align: center;
+    margin: 28px 0 12px;
+  }
+
+  .forecast { display: grid; grid-template-columns: 1fr; gap: 12px; }
+
+  .day {
+    background: var(--ink-2);
+    border-radius: 12px;
+    border-top: 3px solid var(--mist);
+    padding: 14px 14px 12px;
+    min-width: 0;
+  }
+  .day.has-flag { border-top-color: var(--partial); }
+
+  .day-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .day-name {
+    font-family: 'Bebas Neue', 'Inter', sans-serif;
+    font-size: 26px;
+    letter-spacing: 0.03em;
+    color: var(--fog);
+  }
+  .day-date { font-size: 12px; color: var(--mist); }
+
+  .rows { list-style: none; margin: 8px 0 0; padding: 0; }
+  .rows li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+    padding: 5px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .rows li:first-child { border-top: 0; }
+  .rows .k { color: var(--mist); flex: none; }
+  .rows .v { color: var(--fog); text-align: right; font-weight: 500; min-width: 0; }
+  .rows .v small { display: block; font-weight: 400; color: var(--mist); font-size: 11px; }
+
+  .day .flags { margin-top: 10px; }
+  .day .flag { font-size: 12px; padding: 6px 10px; }
+
+  .note {
+    text-align: center;
+    font-size: 12px;
+    color: var(--mist);
+    margin-top: 24px;
+    line-height: 1.6;
+  }
+  .note.error { color: var(--stop); }
+  .note a { color: var(--mist); }
+
+  @media (min-width: 560px) {
+    header, .horizon, main { max-width: 960px; }
+    .today-card { padding: 36px 32px 32px; }
+    .label, .date { font-size: 22px; }
+    .window-note { font-size: 14px; }
+    .stats { grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 26px; }
+    .stat { padding: 16px 16px 14px; }
+    .stat-value { font-size: 44px; }
+    .stat.wide-value .stat-value { font-size: 40px; }
+    .forecast { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (min-width: 900px) {
+    .forecast { grid-template-columns: repeat(5, 1fr); }
+    .rows li { flex-direction: column; gap: 0; }
+    .rows .v { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+  <header>
+    <p class="eyebrow">Whitman Rowing</p>
+    <h1>PRACTICE WEATHER</h1>
+    <p class="sub">Georgetown waterfront &middot; 3&ndash;6 PM Eastern</p>
+  </header>
+
+  <div class="horizon" aria-hidden="true"></div>
+
+  <main>
+    <section class="today-card" id="today-card" aria-live="polite">
+      <div class="card-head">
+        <span class="label">Today</span>
+        <span class="date" id="today-date"></span>
+        <span class="window-note" id="today-window-note"></span>
+      </div>
+      <div class="stats" id="today-stats"></div>
+      <div class="flags" id="today-flags"></div>
+    </section>
+
+    <h2 class="section-title">Next 5 days &middot; 3&ndash;6 PM</h2>
+    <div class="forecast" id="forecast"></div>
+
+    <p class="note" id="note">Loading forecast&hellip;</p>
+  </main>
+
+<script>
+  // ---------------------------------------------------------------
+  // CONFIG
+  // ---------------------------------------------------------------
+  const LAT = 38.9015, LON = -77.0600;   // Georgetown waterfront
+  const TIDE_STATION = '8594900';        // NOAA: Washington, DC (Potomac River)
+  const USGS_SITE = '01646500';          // USGS: Potomac River near Wash, DC Little Falls
+  const NWPS_GAUGE = 'BRKM2';            // NWS river forecast point for the same gauge
+  const TZ = 'America/New_York';
+  const WINDOW_START = 15, WINDOW_END = 18;   // 3 PM to 6 PM
+  const FORECAST_DAYS = 5;
+  const REFRESH_MINUTES = 15;
+  // ---------------------------------------------------------------
+
+  // ---------- Time helpers (everything is pinned to Eastern) ----------
+
+  const etParts = (ms) => {
+    const p = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: TZ, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+    }).formatToParts(new Date(ms)).forEach(x => { p[x.type] = x.value; });
+    return p;
+  };
+
+  // "YYYY-MM-DD" for an instant, in Eastern time
+  const etKey = (ms) => { const p = etParts(ms); return `${p.year}-${p.month}-${p.day}`; };
+
+  // "YYYY-MM-DD HH:MM" for an instant, in Eastern time (sorts correctly as text)
+  const etStamp = (ms) => { const p = etParts(ms); return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`; };
+
+  const addDays = (key, n) => {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+  };
+
+  // Eastern wall-clock time on a given date -> UTC milliseconds
+  const etToMs = (key, h, min = 0) => {
+    const [y, m, d] = key.split('-').map(Number);
+    const guess = Date.UTC(y, m - 1, d, h, min);
+    const p = etParts(guess);
+    const asIfUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute);
+    return guess + (guess - asIfUtc);
+  };
+
+  const dayLabel = (key, opts) =>
+    new Date(key + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', ...opts });
+
+  // "15:31" -> "3:31 PM"
+  const clock = (hhmm) => {
+    let [h, m] = hhmm.split(':').map(Number);
+    const ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${String(m).padStart(2, '0')} ${ap}`;
+  };
+
+  // ---------- Small math helpers ----------
+
+  const avg = (a) => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
+  const max = (a) => a.length ? Math.max(...a) : null;
+  const clean = (a) => a.filter(x => typeof x === 'number' && !isNaN(x));
+
+  const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  const compass = (deg) => COMPASS[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+
+  // Average wind direction as a vector (so 350° and 10° average to N, not S),
+  // weighted by speed so a calm hour doesn't swing the result.
+  const avgDirection = (dirs, speeds) => {
+    let x = 0, y = 0;
+    dirs.forEach((d, i) => {
+      const w = speeds[i] || 0.1;
+      x += Math.sin(d * Math.PI / 180) * w;
+      y += Math.cos(d * Math.PI / 180) * w;
+    });
+    if (!x && !y) return null;
+    return (Math.atan2(x, y) * 180 / Math.PI + 360) % 360;
+  };
+
+  const angleDiff = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+  const uvLabel = (uv) => uv < 3 ? 'Low' : uv < 6 ? 'Moderate' : uv < 8 ? 'High' : uv < 11 ? 'Very high' : 'Extreme';
+
+  const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // ---------- Data sources ----------
+
+  async function getJSON(url) {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status + ' from ' + new URL(url).host);
+    return r.json();
+  }
+
+  // Hourly weather (Open-Meteo, which blends NOAA's HRRR/GFS models for the US)
+  function loadWeather() {
+    const vars = 'temperature_2m,precipitation_probability,precipitation,uv_index,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code';
+    return getJSON('https://api.open-meteo.com/v1/forecast'
+      + `?latitude=${LAT}&longitude=${LON}&hourly=${vars}`
+      + '&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch'
+      + `&timezone=${encodeURIComponent(TZ)}&forecast_days=${FORECAST_DAYS + 1}`);
+  }
+
+  // High/low tide predictions (NOAA CO-OPS), in local time
+  function loadTides(todayKey) {
+    const start = addDays(todayKey, -1).replace(/-/g, '');
+    const end = addDays(todayKey, FORECAST_DAYS + 1).replace(/-/g, '');
+    return getJSON('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter'
+      + `?product=predictions&station=${TIDE_STATION}&begin_date=${start}&end_date=${end}`
+      + '&datum=MLLW&interval=hilo&units=english&time_zone=lst_ldt&format=json&application=iswhitmanrowingtoday');
+  }
+
+  // Latest river flow reading (USGS Water Data API, with the legacy service as backup)
+  async function loadRiverNow() {
+    try {
+      const j = await getJSON('https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-continuous/items'
+        + `?f=json&monitoring_location_id=USGS-${USGS_SITE}&parameter_code=00060`);
+      const p = j.features[0].properties;
+      return { cfs: Number(p.value), ms: Date.parse(p.time) };
+    } catch (e) {
+      const j = await getJSON('https://waterservices.usgs.gov/nwis/iv/'
+        + `?format=json&sites=${USGS_SITE}&parameterCd=00060&siteStatus=all`);
+      const v = j.value.timeSeries[0].values[0].value.slice(-1)[0];
+      return { cfs: Number(v.value), ms: Date.parse(v.dateTime) };
+    }
+  }
+
+  // River flow forecast (NWS Middle Atlantic River Forecast Center via NWPS)
+  async function loadRiverForecast() {
+    const j = await getJSON(`https://api.water.noaa.gov/nwps/v1/gauges/${NWPS_GAUGE}/stageflow`);
+    const toCfs = (pt, units) => units === 'kcfs' ? pt.secondary * 1000 : pt.secondary;
+    const pts = (j.forecast && j.forecast.data || [])
+      .filter(pt => typeof pt.secondary === 'number' && pt.secondary >= 0)
+      .map(pt => ({ ms: Date.parse(pt.validTime), cfs: toCfs(pt, j.forecast.secondaryUnits) }))
+      .sort((a, b) => a.ms - b.ms);
+    return pts;
+  }
+
+  // NWS text forecast + active alerts, used only for the storm / front notes
+  async function loadNws() {
+    const point = await getJSON(`https://api.weather.gov/points/${LAT},${LON}`);
+    const [fc, alerts] = await Promise.all([
+      getJSON(point.properties.forecast),
+      getJSON(`https://api.weather.gov/alerts/active?point=${LAT},${LON}`).catch(() => ({ features: [] }))
+    ]);
+    return { periods: fc.properties.periods, alerts: alerts.features || [] };
+  }
+
+  // ---------- Per-day summaries ----------
+
+  // Averages over the hours 3, 4, 5 and 6 PM. Rain amount uses the hours
+  // ending 4, 5 and 6 PM (each hourly value is the total for the hour before).
+  function summarizeWeather(wx, key) {
+    const h = wx.hourly;
+    const idx = [], rainIdx = [];
+    h.time.forEach((t, i) => {
+      if (t.slice(0, 10) !== key) return;
+      const hr = Number(t.slice(11, 13));
+      if (hr >= WINDOW_START && hr <= WINDOW_END) idx.push(i);
+      if (hr > WINDOW_START && hr <= WINDOW_END) rainIdx.push(i);
+    });
+    if (!idx.length) return null;
+    const pick = (name, list = idx) => clean(list.map(i => h[name][i]));
+
+    const temps = pick('temperature_2m');
+    const speeds = pick('wind_speed_10m');
+    const dirs = pick('wind_direction_10m');
+    const codes = pick('weather_code');
+
+    return {
+      temp: avg(temps),
+      tempFirst: temps[0], tempLast: temps[temps.length - 1],
+      precipChance: max(pick('precipitation_probability')),
+      precipAmount: pick('precipitation', rainIdx).reduce((s, x) => s + x, 0),
+      uv: avg(pick('uv_index')),
+      wind: avg(speeds),
+      gust: max(pick('wind_gusts_10m')),
+      gustAvg: avg(pick('wind_gusts_10m')),
+      dir: avgDirection(dirs, speeds),
+      dirFirst: dirs[0], dirLast: dirs[dirs.length - 1],
+      speedFirst: speeds[0], speedLast: speeds[speeds.length - 1],
+      thunder: codes.some(c => c >= 95),
+      heavyRain: codes.some(c => c === 65 || c === 82)
+    };
+  }
+
+  // Which way the water is moving during practice. Tide predictions are
+  // water level at the Washington, DC station: rising = flood (upstream),
+  // falling = ebb (downstream).
+  function summarizeTide(tides, key) {
+    const ev = tides.map(t => ({ stamp: t.t, type: t.type, ft: Number(t.v) }));
+    const start = `${key} ${String(WINDOW_START).padStart(2, '0')}:00`;
+    const end = `${key} ${String(WINDOW_END).padStart(2, '0')}:00`;
+
+    const next = ev.find(e => e.stamp >= start);
+    if (!next) return null;
+    const turnsInWindow = ev.filter(e => e.stamp >= start && e.stamp <= end);
+
+    const rising = next.type === 'H';
+    const name = (e) => (e.type === 'H' ? 'High' : 'Low');
+    const sameDay = next.stamp.slice(0, 10) === key;
+    const when = clock(next.stamp.slice(11)) + (sameDay ? '' : ' ' + dayLabel(next.stamp.slice(0, 10), { weekday: 'short' }));
+
+    let flow;
+    if (turnsInWindow.length === 0) {
+      flow = rising ? 'Rising (incoming) all practice' : 'Falling (outgoing) all practice';
+    } else {
+      const t = turnsInWindow[0];
+      flow = (rising ? 'Rising' : 'Falling') + ' until ' + clock(t.stamp.slice(11))
+        + ', then ' + (rising ? 'falling' : 'rising');
+      if (turnsInWindow.length > 1) flow += ' again';
+    }
+
+    return { headline: `${name(next)} @ ${when}`, short: name(next) + ' ' + when, flow, rising };
+  }
+
+  // Linear interpolation of the river forecast at the middle of the window.
+  function riverAt(points, ms) {
+    if (!points.length) return null;
+    if (ms < points[0].ms || ms > points[points.length - 1].ms) {
+      // Allow a little slack past either end of the forecast (6 hours)
+      const nearest = ms < points[0].ms ? points[0] : points[points.length - 1];
+      return Math.abs(nearest.ms - ms) <= 6 * 3600e3 ? nearest.cfs : null;
+    }
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1], b = points[i];
+      if (ms <= b.ms) return a.cfs + (b.cfs - a.cfs) * (ms - a.ms) / (b.ms - a.ms || 1);
+    }
+    return null;
+  }
+
+  // Storm / front notes for a day's practice window.
+  function flagsFor(key, wx, nws) {
+    const flags = [];
+    const winStart = etToMs(key, WINDOW_START), winEnd = etToMs(key, WINDOW_END);
+
+    if (nws) {
+      // Active NWS watches/warnings/advisories that overlap the window
+      nws.alerts.forEach(a => {
+        const p = a.properties;
+        const on = Date.parse(p.onset || p.effective);
+        const off = Date.parse(p.ends || p.expires);
+        if (on <= winEnd && (isNaN(off) || off >= winStart)) {
+          flags.push(`<strong>${esc(p.event)}</strong> in effect`);
+        }
+      });
+
+      // The NWS daytime forecast for that date, if it mentions storms or a front
+      const period = nws.periods.find(p => p.isDaytime && p.startTime.slice(0, 10) === key);
+      if (period) {
+        const hits = period.detailedForecast
+          .split(/(?<=\.)\s+/)
+          .filter(s => /thunder|severe|cold front|warm front|\bfront\b|strong storm|damaging/i.test(s));
+        if (hits.length) flags.push(`<strong>NWS:</strong> ${esc(hits.join(' '))}`);
+      }
+    }
+
+    if (wx) {
+      if (wx.thunder) flags.push('<strong>Thunderstorms</strong> in the model forecast for 3&ndash;6 PM');
+      else if (wx.heavyRain) flags.push('<strong>Heavy rain</strong> in the model forecast for 3&ndash;6 PM');
+
+      // Signs of a front passing during practice: a sharp temperature drop,
+      // or a big wind shift with the wind picking up.
+      const drop = wx.tempFirst - wx.tempLast;
+      const shift = (wx.dirFirst != null && wx.dirLast != null) ? angleDiff(wx.dirFirst, wx.dirLast) : 0;
+      if (drop >= 7) {
+        flags.push(`<strong>Possible front:</strong> temperature drops about ${Math.round(drop)}&deg; between 3 and 6 PM`);
+      } else if (shift >= 90 && wx.speedLast >= 8 && wx.speedLast > wx.speedFirst) {
+        flags.push(`<strong>Possible front:</strong> wind shifts to ${compass(wx.dirLast)} and picks up to ${Math.round(wx.speedLast)} mph`);
+      }
+    }
+    return flags;
+  }
+
+  // ---------- Rendering ----------
+
+  // Arrow points the way the wind is blowing TO (downwind)
+  const arrowSvg = (fromDeg) =>
+    `<svg class="arrow" viewBox="0 0 24 24" aria-hidden="true" style="transform: rotate(${(fromDeg + 180) % 360}deg)">`
+    + '<path d="M12 2 L19 20 L12 16 L5 20 Z" fill="currentColor"/></svg>';
+
+  const DASH = '&mdash;';
+
+  function todayStats(w, tide, riverNow, riverFc) {
+    const tile = (label, value, detail = '', cls = '') =>
+      `<div class="stat ${cls}"><span class="stat-label">${label}</span>`
+      + `<span class="stat-value">${value}</span>`
+      + (detail ? `<span class="stat-detail">${detail}</span>` : '') + '</div>';
+
+    const riverDetail = riverNow
+      ? `USGS Little Falls &middot; ${clock(etStamp(riverNow.ms).slice(11))}`
+        + (riverFc != null ? `<br>Forecast 4:30 PM: ${fmtInt(riverFc)}` : '')
+      : (riverFc != null ? 'NWS forecast for 4:30 PM' : 'Unavailable');
+    const riverValue = riverNow ? riverNow.cfs : riverFc;
+
+    return [
+      tile('Temperature', w ? `${Math.round(w.temp)}<span class="unit">&deg;F</span>` : DASH,
+        w ? `${Math.round(w.tempFirst)}&deg; at 3 PM &rarr; ${Math.round(w.tempLast)}&deg; at 6 PM` : ''),
+      tile('Precipitation', w ? `${Math.round(w.precipChance)}<span class="unit">%</span>` : DASH,
+        w ? (w.precipAmount >= 0.01 ? `About ${w.precipAmount.toFixed(2)} in` : 'No measurable rain expected') : ''),
+      tile('UV Index', w ? `${Math.round(w.uv)}` : DASH, w ? uvLabel(w.uv) : ''),
+      tile('Sustained Wind', w ? `${Math.round(w.wind)}<span class="unit">mph</span>` : DASH, w ? 'Average, 3&ndash;6 PM' : ''),
+      tile('Wind Gusts', w ? `${Math.round(w.gust)}<span class="unit">mph</span>` : DASH, w ? `Peak &middot; average ${Math.round(w.gustAvg)} mph` : ''),
+      tile('Wind Direction', w && w.dir != null ? `${arrowSvg(w.dir)}${compass(w.dir)}` : DASH,
+        w && w.dir != null ? `From the ${compass(w.dir)} (${Math.round(w.dir)}&deg;)` : ''),
+      tile('Next Tide', tide ? tide.short : DASH, tide ? tide.flow : 'Unavailable', 'wide-value'),
+      tile('River Flow', riverValue != null ? `${fmtInt(riverValue)}<span class="unit">cfs</span>` : DASH, riverDetail)
+    ].join('');
+  }
+
+  function dayCard(key, w, tide, riverFc, flags) {
+    const row = (k, v, small = '') => `<li><span class="k">${k}</span><span class="v">${v}${small ? `<small>${small}</small>` : ''}</span></li>`;
+    return `<article class="day${flags.length ? ' has-flag' : ''}">
+      <div class="day-head">
+        <span class="day-name">${dayLabel(key, { weekday: 'long' })}</span>
+        <span class="day-date">${dayLabel(key, { month: 'short', day: 'numeric' })}</span>
+      </div>
+      <ul class="rows">
+        ${row('Temp', w ? `${Math.round(w.temp)}&deg;F` : DASH)}
+        ${row('Precip', w ? `${Math.round(w.precipChance)}%` : DASH, w && w.precipAmount >= 0.01 ? `${w.precipAmount.toFixed(2)} in` : '')}
+        ${row('UV', w ? `${Math.round(w.uv)} &middot; ${uvLabel(w.uv)}` : DASH)}
+        ${row('Wind', w ? `${Math.round(w.wind)} mph` : DASH)}
+        ${row('Gusts', w ? `${Math.round(w.gust)} mph` : DASH)}
+        ${row('Direction', w && w.dir != null ? `${compass(w.dir)} ${arrowSvg(w.dir)}` : DASH)}
+        ${row('Next tide', tide ? tide.headline : DASH, tide ? tide.flow : '')}
+        ${riverFc != null
+          ? row('River', `${fmtInt(riverFc)} cfs <span class="tag">fcst</span>`)
+          : row('River', DASH, 'Beyond NWS river forecast')}
+      </ul>
+      <div class="flags">${flags.map(f => `<div class="flag">${f}</div>`).join('')}</div>
+    </article>`;
+  }
+
+  // ---------- Main ----------
+
+  async function run() {
+    const now = Date.now();
+    const todayKey = etKey(now);
+    const keys = Array.from({ length: FORECAST_DAYS + 1 }, (_, i) => addDays(todayKey, i));
+    const note = document.getElementById('note');
+
+    const results = await Promise.allSettled([
+      loadWeather(), loadTides(todayKey), loadRiverNow(), loadRiverForecast(), loadNws()
+    ]);
+    const [wxR, tideR, nowR, fcR, nwsR] = results;
+    const val = (r) => r.status === 'fulfilled' ? r.value : null;
+    const wx = val(wxR), tides = val(tideR), riverNow = val(nowR), riverFc = val(fcR) || [], nws = val(nwsR);
+    results.forEach(r => { if (r.status === 'rejected') console.error(r.reason); });
+
+    const tideList = tides && tides.predictions ? tides.predictions : null;
+
+    const days = keys.map(key => {
+      const w = wx ? summarizeWeather(wx, key) : null;
+      return {
+        key, w,
+        tide: tideList ? summarizeTide(tideList, key) : null,
+        river: riverAt(riverFc, etToMs(key, 16, 30)),
+        flags: flagsFor(key, w, nws)
+      };
+    });
+
+    // Today
+    const t = days[0];
+    document.getElementById('today-date').textContent = dayLabel(t.key, { weekday: 'long', month: 'long', day: 'numeric' });
+    const nowStamp = etStamp(now);
+    document.getElementById('today-window-note').textContent =
+      nowStamp.slice(11) >= `${WINDOW_END}:00` ? 'Practice window has passed. Showing this afternoon’s forecast.' : '';
+    document.getElementById('today-stats').innerHTML = todayStats(t.w, t.tide, riverNow, t.river);
+    document.getElementById('today-flags').innerHTML = t.flags.map(f => `<div class="flag">${f}</div>`).join('');
+    document.getElementById('today-card').classList.toggle('has-flag', t.flags.length > 0);
+
+    // Next 5 days
+    document.getElementById('forecast').innerHTML =
+      days.slice(1).map(d => dayCard(d.key, d.w, d.tide, d.river, d.flags)).join('');
+
+    // Footer
+    const failed = [];
+    if (!wx) failed.push('weather');
+    if (!tideList) failed.push('tides');
+    if (!riverNow && !riverFc.length) failed.push('river flow');
+    if (!nws) failed.push('NWS storm alerts');
+    const updated = clock(nowStamp.slice(11));
+    note.classList.toggle('error', failed.length > 0);
+    note.innerHTML = (failed.length ? `Couldn’t load ${failed.join(', ')} right now. ` : '')
+      + `Updated ${updated}. Temperature, UV, sustained wind and direction are 3&ndash;6 PM averages; gusts are the peak; rain chance is the highest hourly chance and rain amount is the 3&ndash;6 PM total. River forecasts are for 4:30 PM.`
+      + `<br>Sources: Open-Meteo (NOAA models), NWS, NOAA tide station ${TIDE_STATION} (Washington, DC), USGS ${USGS_SITE} and NWS river forecast (Little Falls).`;
+  }
+
+  run().catch(err => {
+    console.error(err);
+    const note = document.getElementById('note');
+    note.textContent = 'Could not load the forecast right now. Try refreshing.';
+    note.classList.add('error');
+  });
+
+  // Keep a phone left open on this page current
+  setInterval(() => run().catch(console.error), REFRESH_MINUTES * 60 * 1000);
+</script>
+
+</body>
+</html>

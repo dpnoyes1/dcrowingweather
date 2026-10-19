@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Is Whitman Rowing Today?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0b1e2d;      /* deep river navy - background */
+    --ink-2: #142b3d;    /* card panel */
+    --mist: #93a9b8;     /* muted secondary text */
+    --fog: #eef2f4;      /* primary text on dark */
+    --dawn: #74b0da;     /* Whitman blue accent (Pantone 542C) */
+    --go: #00FF00;       /* practice on */
+    --stop: #FF0000;     /* practice off */
+    --partial: #FFA500;  /* partial practice */
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--ink);
+    color: var(--fog);
+    font-family: 'Inter', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 20px 40px;
+  }
+
+  header {
+    text-align: center;
+    max-width: 480px;
+  }
+
+  .eyebrow {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dawn);
+    margin: 0 0 6px;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 500;
+    margin: 0;
+    color: var(--fog);
+  }
+
+  .horizon {
+    width: 100%;
+    max-width: 480px;
+    height: 2px;
+    margin: 22px 0 28px;
+    background: linear-gradient(90deg, transparent, var(--dawn), transparent);
+    background-size: 200% 100%;
+    animation: drift 6s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .horizon { animation: none; }
+  }
+
+  @keyframes drift {
+    0%, 100% { background-position: 0% 0%; }
+    50% { background-position: 100% 0%; }
+  }
+
+  main {
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .status-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  @media (min-width: 560px) {
+    header { max-width: 960px; }
+    .horizon { max-width: 960px; }
+    main { max-width: 960px; }
+    .status-grid { flex-direction: row; gap: 32px; }
+    .card { min-height: 400px; padding: 48px 40px 56px; }
+    .label { font-size: 26px; }
+    .date { font-size: 26px; }
+    .status { font-size: 84px; margin-top: 20px; }
+    .reason { font-size: 24px; padding: 8px 20px; margin-top: 28px; }
+    .regatta-card { margin-top: 32px; padding: 48px 40px 56px; }
+    .regatta-status { font-size: 56px; }
+  }
+
+  .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 200px;
+    background: var(--ink-2);
+    border-radius: 12px;
+    border-top: 3px solid var(--mist);
+    padding: 24px 20px 28px;
+    text-align: center;
+  }
+
+  .card.is-yes { border-top-color: var(--go); }
+  .card.is-no  { border-top-color: var(--stop); }
+  .card.is-partial { border-top-color: var(--partial); }
+
+  .regatta-card {
+    margin-top: 16px;
+    background: var(--ink-2);
+    border-radius: 12px;
+    border-top: 3px solid var(--dawn);
+    padding: 24px 20px 28px;
+    text-align: center;
+  }
+
+  .regatta-status {
+    display: block;
+    font-family: 'Bebas Neue', 'Inter', sans-serif;
+    font-size: 32px;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    color: var(--dawn);
+  }
+
+  .label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mist);
+  }
+
+  .date {
+    display: block;
+    font-size: 13px;
+    color: var(--mist);
+    margin-top: 2px;
+  }
+
+  .status {
+    display: block;
+    font-family: 'Bebas Neue', 'Inter', sans-serif;
+    font-size: 52px;
+    line-height: 1.1;
+    letter-spacing: 0.03em;
+    margin-top: 10px;
+    color: var(--mist);
+    white-space: nowrap;
+  }
+
+  .card.is-yes .status { color: var(--go); }
+  .card.is-no .status  { color: var(--stop); }
+  .card.is-partial .status { color: var(--partial); }
+
+  .reason {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 12px;
+    color: var(--mist);
+    letter-spacing: 0.02em;
+  }
+
+  .note {
+    text-align: center;
+    font-size: 13px;
+    color: var(--mist);
+    margin-top: 24px;
+    line-height: 1.6;
+  }
+
+  .note.error { color: var(--stop); }
+</style>
+</head>
+<body>
+
+  <header>
+    <p class="eyebrow">Whitman Rowing</p>
+    <h1>PRACTICE?</h1>
+  </header>
+
+  <div class="horizon" aria-hidden="true"></div>
+
+  <main>
+    <div class="status-grid">
+      <div class="card" id="today-card">
+        <span class="label">Today</span>
+        <span class="date" id="today-date"></span>
+        <span class="status" id="today-status">&hellip;</span>
+        <span class="reason" id="today-reason"></span>
+      </div>
+      <div class="card" id="tomorrow-card">
+        <span class="label">Tomorrow</span>
+        <span class="date" id="tomorrow-date"></span>
+        <span class="status" id="tomorrow-status">&hellip;</span>
+        <span class="reason" id="tomorrow-reason"></span>
+      </div>
+    </div>
+
+    <div class="regatta-card" id="regatta-card" hidden>
+      <span class="regatta-status" id="regatta-status"></span>
+      <span class="reason" id="regatta-reason"></span>
+    </div>
+
+    <p class="note" id="note">Loading today&rsquo;s schedule&hellip;</p>
+  </main>
+
+<script>
+  // ----- CONFIG: fill these in from your Google Sheet -----
+  // SHEET_ID comes from the sheet's URL: .../d/SHEET_ID/edit
+  const SHEET_ID = '1c_h72UnGtO8P7U2iy6oPifMRiUG_rVsxAQlHhlyRCZ0';
+  const SEASONS_GID = '0';
+  const OVERRIDES_GID = '884628836';
+  // ----------------------------------------------------------
+
+  const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  // Loads a sheet tab via a <script> tag instead of fetch(). Script tags
+  // aren't subject to CORS the way fetch requests are, which sidesteps
+  // the "Failed to fetch" error Google's export links were triggering.
+  function loadTab(gid) {
+    return new Promise((resolve, reject) => {
+      const callbackName = 'gvizCallback_' + gid + '_' + Math.random().toString(36).slice(2);
+      const script = document.createElement('script');
+
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('Timed out loading sheet data (gid ' + gid + ')'));
+      }, 8000);
+
+      function cleanup() {
+        clearTimeout(timeout);
+        delete window[callbackName];
+        script.remove();
+      }
+
+      window[callbackName] = function (data) {
+        cleanup();
+        resolve(data);
+      };
+
+      script.onerror = function () {
+        cleanup();
+        reject(new Error('Failed to load sheet data (gid ' + gid + ')'));
+      };
+
+      script.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+        '/gviz/tq?gid=' + gid + '&tqx=responseHandler:' + callbackName;
+      document.body.appendChild(script);
+    });
+  }
+
+  // Converts the gviz table response into the same shape our lookup
+  // logic expects: an array of objects keyed by column header.
+  function tableToObjects(data) {
+    const cols = data.table.cols.map(c => c.label || c.id);
+    return data.table.rows.map(r => {
+      const obj = {};
+      cols.forEach((label, i) => {
+        const cell = r.c[i];
+        if (!cell) { obj[label] = ''; return; }
+        obj[label] = (cell.f != null) ? cell.f : (cell.v != null ? String(cell.v) : '');
+      });
+      return obj;
+    });
+  }
+
+  async function fetchTab(gid) {
+    const data = await loadTab(gid);
+    return tableToObjects(data);
+  }
+
+  function parseDate(str) {
+    if (!str) return null;
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return null;
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function sameDay(a, b) {
+    return a && b &&
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+  }
+
+  function normalizeStatus(v) {
+    const s = (v || '').trim().toUpperCase();
+    if (s === 'YES') return 'YES';
+    if (s === 'PARTIAL') return 'PARTIAL';
+    if (s === 'REGATTA') return 'REGATTA';
+    return 'NO';
+  }
+
+  // An override for the date wins, and its Reason (if given) is shown
+  // as-is. Otherwise, use the season's weekly pattern, with the reason
+  // shown as "Standard Schedule". If neither applies, default to NO.
+  function detailsFor(date, seasons, overrides) {
+    const override = overrides.find(o =>
+      sameDay(parseDate(o['Date']), date) && normalizeStatus(o['Status']) !== 'REGATTA'
+    );
+    if (override) {
+      const status = normalizeStatus(override['Status']);
+      const reasonRaw = (override['Reason'] || '').trim();
+      let reason;
+      if (reasonRaw) reason = reasonRaw;
+      else if (status === 'PARTIAL') reason = 'Check Slack for Details';
+      else reason = 'Standard Schedule';
+      return { status, reason };
+    }
+
+    const season = seasons.find(s => {
+      const start = parseDate(s['Start Date']);
+      const end = parseDate(s['End Date']);
+      return start && end && date >= start && date <= end;
+    });
+    const status = season ? normalizeStatus(season[WEEKDAYS[date.getDay()]]) : 'NO';
+    return { status, reason: 'Standard Schedule' };
+  }
+
+  // Finds the soonest REGATTA-status row landing within the next 7 days
+  // (today through 6 days out, inclusive). Returns null if none.
+  function upcomingRegatta(today, overrides) {
+    const horizon = new Date(today);
+    horizon.setDate(horizon.getDate() + 6);
+
+    return overrides
+      .filter(o => normalizeStatus(o['Status']) === 'REGATTA')
+      .map(o => ({ date: parseDate(o['Date']), reason: (o['Reason'] || '').trim() }))
+      .filter(r => r.date && r.date >= today && r.date <= horizon)
+      .sort((a, b) => a.date - b.date)[0] || null;
+  }
+
+  function renderRegatta(regatta) {
+    const card = document.getElementById('regatta-card');
+    if (!regatta) { card.hidden = true; return; }
+
+    const dateText = regatta.date
+      .toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+      .toUpperCase();
+    document.getElementById('regatta-status').textContent = 'REGATTA ON ' + dateText;
+
+    const reasonEl = document.getElementById('regatta-reason');
+    if (regatta.reason) {
+      reasonEl.textContent = regatta.reason;
+      reasonEl.hidden = false;
+    } else {
+      reasonEl.hidden = true;
+    }
+
+    card.hidden = false;
+  }
+
+  function statusClass(status) {
+    if (status === 'YES') return 'is-yes';
+    if (status === 'PARTIAL') return 'is-partial';
+    return 'is-no';
+  }
+
+  function render(prefix, date, status, reason) {
+    const card = document.getElementById(prefix + '-card');
+    card.classList.add(statusClass(status));
+    document.getElementById(prefix + '-date').textContent =
+      date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    document.getElementById(prefix + '-status').textContent = status;
+    document.getElementById(prefix + '-reason').textContent = reason;
+  }
+
+  (async function init() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const note = document.getElementById('note');
+
+    try {
+      const [seasons, overrides] = await Promise.all([
+        fetchTab(SEASONS_GID),
+        fetchTab(OVERRIDES_GID)
+      ]);
+
+      const todayDetails = detailsFor(today, seasons, overrides);
+      const tomorrowDetails = detailsFor(tomorrow, seasons, overrides);
+      render('today', today, todayDetails.status, todayDetails.reason);
+      render('tomorrow', tomorrow, tomorrowDetails.status, tomorrowDetails.reason);
+      renderRegatta(upcomingRegatta(today, overrides));
+
+      note.textContent = 'Updates automatically from the season schedule.';
+    } catch (err) {
+      console.error(err);
+      note.textContent = 'Could not load the schedule right now. Try refreshing.';
+      note.classList.add('error');
+    }
+  })();
+</script>
+
+</body>
+</html>
