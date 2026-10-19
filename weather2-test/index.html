@@ -727,21 +727,44 @@
     };
   }
 
-  // Daylight during the window: sunrise for morning, sunset for evening (and
-  // for afternoon if the sun sets before practice ends, as it does in winter)
-  function lightFor(w, T, timeKey) {
-    if (!w || !w.sunrise) return null;
-    const toH = (s) => { const [a, b] = s.split(':').map(Number); return a + b / 60; };
-    const rise = toH(w.sunrise), set = toH(w.sunset);
+  // Sun times (UTC ms) when the sun's center is at altitude h0 degrees, from the
+  // standard sunrise equation. -0.833 = sunrise/sunset, -6 = civil twilight.
+  function sunTimes(key, lat, lon, h0) {
+    const r = Math.PI / 180;
+    const [y, m, d] = key.split('-').map(Number);
+    const jd = Date.UTC(y, m - 1, d, 12) / 86400000 + 2440587.5;
+    const n = Math.ceil(jd - 2451545.0 + 0.0008);
+    const Jstar = n - lon / 360;
+    const M = (357.5291 + 0.98560028 * Jstar) % 360;
+    const C = 1.9148 * Math.sin(M * r) + 0.02 * Math.sin(2 * M * r) + 0.0003 * Math.sin(3 * M * r);
+    const lam = (M + C + 180 + 102.9372) % 360;
+    const Jt = 2451545.0 + Jstar + 0.0053 * Math.sin(M * r) - 0.0069 * Math.sin(2 * lam * r);
+    const dec = Math.asin(Math.sin(lam * r) * Math.sin(23.4397 * r));
+    const cosW = (Math.sin(h0 * r) - Math.sin(lat * r) * Math.sin(dec)) / (Math.cos(lat * r) * Math.cos(dec));
+    if (cosW < -1 || cosW > 1) return null;
+    const w = Math.acos(cosW) / r;
+    const ms = (j) => (j - 2440587.5) * 86400000;
+    return { rise: ms(Jt - w / 360), set: ms(Jt + w / 360) };
+  }
+
+  // Daylight during the window. "Dark" is civil twilight (sun 6° below the
+  // horizon), when there's no longer enough natural light to see well, not
+  // sunrise/sunset. Mornings show first light, evenings last light; afternoons
+  // only when last light comes before practice ends (winter).
+  function lightFor(key, loc, T, timeKey) {
+    const sun = sunTimes(key, loc.lat, loc.lon, -0.833), civ = sunTimes(key, loc.lat, loc.lon, -6);
+    if (!sun || !civ) return null;
+    const t = (ms) => clock(etStamp(ms).slice(11));
+    const winS = etToMs(key, T.start), winE = etToMs(key, T.end);
     if (timeKey === 'morning') {
-      const note = rise >= T.end ? 'Dark the whole window'
-        : rise > T.start ? `Dark until ${clock(w.sunrise)}` : 'Light the whole window';
-      return { label: 'Sunrise', time: clock(w.sunrise), note };
+      const dawn = civ.rise;
+      const note = dawn >= winE ? 'Dark the whole window' : dawn > winS ? `Dark until ${t(dawn)}` : 'Light the whole window';
+      return { label: 'First light', time: t(dawn), sub: `Sunrise ${t(sun.rise)}`, note };
     }
-    if (timeKey === 'evening' || set < T.end) {
-      const note = set <= T.start ? 'Dark the whole window'
-        : set < T.end ? `Dark after ${clock(w.sunset)}` : 'Light the whole window';
-      return { label: 'Sunset', time: clock(w.sunset), note };
+    if (timeKey === 'evening' || civ.set < winE) {
+      const dusk = civ.set;
+      const note = dusk <= winS ? 'Dark the whole window' : dusk < winE ? `Dark after ${t(dusk)}` : 'Light the whole window';
+      return { label: 'Last light', time: t(dusk), sub: `Sunset ${t(sun.set)}`, note };
     }
     return null;
   }
@@ -944,7 +967,7 @@
       + metric('Temperature', w ? `${Math.round(w.temp)}<span class="unit">&deg;F</span>` : DASH,
           w ? `${Math.round(w.tempFirst)}&deg; at ${hourLabel(T.start)} &rarr; ${Math.round(w.tempLast)}&deg; at ${hourLabel(T.end)}` : '')
       + metric('UV Index', w ? `${Math.round(w.uv)}` : DASH, w ? uvLabel(w.uv) : '')
-      + (light ? metric(light.label, light.time.replace(/ (AM|PM)/, '<span class="unit">$1</span>'), light.note) : '')
+      + (light ? metric(light.label, light.time.replace(/ (AM|PM)/, '<span class="unit">$1</span>'), `${light.sub}<br>${light.note}`) : '')
       + '</div>');
 
     // Precipitation & advisories
@@ -1139,7 +1162,7 @@
         ${row('Temp', w ? `${Math.round(w.temp)}&deg;F` : DASH)}
         ${row('Precip', w ? `${Math.round(w.precipChance)}%` : DASH, w && w.precipAmount >= 0.01 ? `${w.precipAmount.toFixed(2)} in` : '')}
         ${row('UV', w ? `${Math.round(w.uv)} &middot; ${uvLabel(w.uv)}` : DASH)}
-        ${light ? row(light.label, light.time, light.note) : ''}
+        ${light ? row(light.label, light.time, `${light.sub} &middot; ${light.note}`) : ''}
         ${row('Wind', w ? `${Math.round(w.wind)} mph` : DASH, w ? `gusts to ${Math.round(w.gust)}` : '')}
         ${row('Direction', w && w.dir != null ? `${compass(w.dir)} ${arrowSvg(w.dir)}` : DASH)}
         ${loc.tide ? row('Next tide', tide ? tide.headline : DASH, tide ? tide.flow : '') : ''}
@@ -1223,7 +1246,7 @@
       else if (courseFlow == null && riverNow) { courseFlow = riverNow.cfs; riverHeld = riverNow.cfs; }
       return {
         key, w, river, riverHeld,
-        light: lightFor(w, T, state.time),
+        light: lightFor(key, loc, T, state.time),
         tide: tideList ? summarizeTide(tideList, key, T) : null,
         course: coursePrediction(loc, w, tideList ? tideFactor(tideList, key, T) : null, courseFlow, key),
         flags: flagsFor(key, w, nws, T, loc)
@@ -1255,6 +1278,7 @@
           ? `Rated against a typical day for the month (median river flow, no wind, slack tide). `
           : `Rated on wind only, against flatwater with no wind. `)
       + `Splits are per 500 m for an eight; Fast or Slow means at least ${MODEL.band} s/500 different. These are estimates, not yet checked against race results.`
+      + `<br>First and last light are civil twilight (sun 6&deg; below the horizon), when it gets too dark to see well on the water.`
       + `<br>Sources: Open-Meteo (NOAA models), NWS`
       + (loc.tide ? `, NOAA tide station ${loc.tide.id} (${loc.tide.name})` : '')
       + (loc.flow ? `, ${loc.flow.name} (${loc.flow.sites.join(' + ')})${loc.flow.nwps ? ' and NWS river forecast' : ''}` : '')
