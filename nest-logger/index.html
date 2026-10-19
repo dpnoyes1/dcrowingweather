@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Nest Logger – Privacy Policy</title>
+<style>
+  :root { --ink: #0b1e2d; --ink-2: #142b3d; --mist: #93a9b8; --fog: #eef2f4; --dawn: #74b0da; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ink); color: var(--fog);
+    font-family: 'Inter', system-ui, sans-serif; line-height: 1.6;
+    padding: 32px 16px 40px; display: flex; justify-content: center;
+  }
+  main { max-width: 640px; width: 100%; background: var(--ink-2); border-radius: 12px; padding: 24px; }
+  h1 { margin-top: 0; font-size: 1.5rem; }
+  h2 { font-size: 1.05rem; color: var(--dawn); margin-top: 1.5em; }
+  p, li { color: var(--fog); }
+  .muted { color: var(--mist); font-size: 0.9rem; }
+  a { color: var(--dawn); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Nest Logger</h1>
+  <p>Nest Logger is a personal-use Google Apps Script run by David Noyes. It reads the current temperature,
+     humidity and settings of David's own Google Nest thermostat through Google's Smart Device Management API
+     and records them in his own Google Sheet. It is not offered to, or used by, anyone else.</p>
+
+  <h2>Privacy policy</h2>
+  <ul>
+    <li><strong>Data accessed:</strong> thermostat readings and settings (temperature, humidity, mode, setpoints,
+        HVAC and connectivity status) from the account owner's own Nest device. No camera, doorbell or other device data is used.</li>
+    <li><strong>How it's used:</strong> readings are written to a private Google Sheet owned by the account holder,
+        to track home temperature over time.</li>
+    <li><strong>Sharing:</strong> data is not sold, shared, or transferred to any third party.</li>
+    <li><strong>Storage:</strong> data stays in the owner's Google account. Authorization tokens are stored in the
+        script's private properties.</li>
+    <li><strong>Revoking access:</strong> access can be removed at any time from
+        <a href="https://myaccount.google.com/permissions">Google Account permissions</a> or the Nest app's Works with Google settings.</li>
+  </ul>
+  <p>Google API data use complies with the
+     <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+     including the Limited Use requirements.</p>
+
+  <p class="muted">Last updated October 19, 2026</p>
+</main>
+</body>
+</html>
