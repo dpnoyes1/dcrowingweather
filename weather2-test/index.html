@@ -1030,25 +1030,54 @@
     let map = null, markerLayer = null, loc = null, canvas, ctx, particles = [], wind = null, w = 0, h = 0, dpr = 1;
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    // Center and zoom for a location's map at a given box size
+    function viewFor(l, bw, bh) {
+      if (l.frame) {
+        // Anchor a boathouse at a set spot in the frame (Georgetown)
+        const f = l.frame;
+        const metersPerPxAtZ0 = 156543.03 * Math.cos(f.anchor[0] * Math.PI / 180);
+        const zoom = Math.min(17, Math.max(12.5, Math.log2((f.fx * bw * metersPerPxAtZ0) / f.meters)));
+        const p = L.CRS.EPSG3857.latLngToPoint(L.latLng(f.anchor), zoom);
+        const c = L.point(p.x - (f.fx - 0.5) * bw, p.y + (0.5 - f.fy) * bh);
+        return { center: L.CRS.EPSG3857.pointToLatLng(c, zoom), zoom };
+      }
+      // Set center, zoomed so `width` meters fit across the box
+      const v = l.view;
+      const metersPerPxAtZ0 = 156543.03 * Math.cos(v.center[0] * Math.PI / 180);
+      return { center: L.latLng(v.center), zoom: Math.min(16, Math.max(11, Math.log2((bw * metersPerPxAtZ0) / v.width))) };
+    }
+
     function frame() {
       if (!map || !loc) return;
       const box = map.getContainer();
       const bw = box.clientWidth, bh = box.clientHeight;
       if (!bw || !bh) return;
-      if (loc.frame) {
-        // Anchor a boathouse at a set spot in the frame (Georgetown)
-        const f = loc.frame;
-        const metersPerPxAtZ0 = 156543.03 * Math.cos(f.anchor[0] * Math.PI / 180);
-        const zoom = Math.log2((f.fx * bw * metersPerPxAtZ0) / f.meters);
-        map.setView(f.anchor, Math.min(17, Math.max(12.5, zoom)), { animate: false });
-        map.panBy([-(f.fx - 0.5) * bw, (0.5 - f.fy) * bh], { animate: false });
-      } else {
-        // Set center, zoomed so `width` meters fit across the box
-        const v = loc.view;
-        const metersPerPxAtZ0 = 156543.03 * Math.cos(v.center[0] * Math.PI / 180);
-        const zoom = Math.log2((bw * metersPerPxAtZ0) / v.width);
-        map.setView(v.center, Math.min(16, Math.max(11, zoom)), { animate: false });
-      }
+      const v = viewFor(loc, bw, bh);
+      map.setView(v.center, v.zoom, { animate: false });
+    }
+
+    // Download the map tiles other locations will need, so switching to one
+    // shows a finished map instead of filling in piece by piece.
+    const preloaded = [];
+    function preloadTiles(locs) {
+      if (!map) return;
+      const box = map.getContainer();
+      const bw = box.clientWidth, bh = box.clientHeight;
+      if (!bw || !bh) return;
+      locs.forEach(l => {
+        const v = viewFor(l, bw, bh);
+        const z = Math.min(16, Math.round(v.zoom));            // the tile level Leaflet will draw
+        const s = Math.pow(2, v.zoom - z);
+        const c = L.CRS.EPSG3857.latLngToPoint(v.center, z);
+        const hw = bw / s / 2 + 256, hh = bh / s / 2 + 256;    // plus a tile of margin
+        for (let x = Math.floor((c.x - hw) / 256); x <= Math.floor((c.x + hw) / 256); x++) {
+          for (let y = Math.floor((c.y - hh) / 256); y <= Math.floor((c.y + hh) / 256); y++) {
+            const img = new Image();
+            img.src = `https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/${z}/${y}/${x}`;
+            preloaded.push(img);
+          }
+        }
+      });
     }
 
     function sizeCanvas() {
@@ -1124,6 +1153,7 @@
     }
 
     return {
+      preloadTiles,
       setLocation(next) {
         init();
         if (!map || loc === next) return;
@@ -1205,18 +1235,29 @@
   // Data is cached per location for a few minutes, so switching the time (or
   // switching back to a location) doesn't refetch everything.
   const cache = {};
-  async function loadAll(locKey, todayKey) {
+  function loadAll(locKey, todayKey) {
     const hit = cache[locKey];
-    if (hit && hit.todayKey === todayKey && Date.now() - hit.at < 10 * 60e3) return hit.data;
+    if (hit && hit.todayKey === todayKey && Date.now() - hit.at < 10 * 60e3) return hit.promise;
     const loc = LOCATIONS[locKey];
-    const results = await Promise.allSettled([
+    const promise = Promise.allSettled([
       loadWeather(loc), loadTides(loc, todayKey), loadRiverNow(loc), loadRiverForecast(loc), loadNws(loc)
-    ]);
-    results.forEach(r => { if (r.status === 'rejected') console.error(r.reason); });
-    const val = (r) => r.status === 'fulfilled' ? r.value : null;
-    const data = { wx: val(results[0]), tides: val(results[1]), riverNow: val(results[2]), riverFc: val(results[3]) || [], nws: val(results[4]) };
-    cache[locKey] = { at: Date.now(), todayKey, data };
-    return data;
+    ]).then(results => {
+      results.forEach(r => { if (r.status === 'rejected') console.error(r.reason); });
+      const val = (r) => r.status === 'fulfilled' ? r.value : null;
+      return { wx: val(results[0]), tides: val(results[1]), riverNow: val(results[2]), riverFc: val(results[3]) || [], nws: val(results[4]) };
+    });
+    cache[locKey] = { at: Date.now(), todayKey, promise };
+    return promise;
+  }
+
+  // After the chosen location is on screen, load the other locations' data and
+  // map tiles in the background so switching is instant.
+  let tilesPreloaded = false;
+  function prefetchOthers() {
+    const todayKey = etKey(Date.now());
+    const others = Object.keys(LOCATIONS).filter(k => k !== state.loc);
+    others.forEach(k => loadAll(k, todayKey).catch(console.error));
+    if (!tilesPreloaded) { tilesPreloaded = true; WindMap.preloadTiles(others.map(k => LOCATIONS[k])); }
   }
 
   let runId = 0;
@@ -1286,7 +1327,7 @@
   }
 
   renderToggles();
-  run().catch(err => {
+  run().then(prefetchOthers).catch(err => {
     console.error(err);
     const note = document.getElementById('note');
     note.textContent = 'Could not load the forecast right now. Try refreshing.';
@@ -1294,7 +1335,7 @@
   });
 
   // Keep a phone left open on this page current
-  setInterval(() => run(true).catch(console.error), REFRESH_MINUTES * 60 * 1000);
+  setInterval(() => run(true).then(prefetchOthers).catch(console.error), REFRESH_MINUTES * 60 * 1000);
 </script>
 
 </body>
