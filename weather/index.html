@@ -238,7 +238,7 @@
   .map-overlay {
     position: absolute;
     left: 12px;
-    bottom: 22px;
+    bottom: 46px;   /* clear of the map credits strip, which can wrap to two lines */
     z-index: 3;
     background: rgba(11, 30, 45, 0.82);
     border: 1px solid rgba(116, 176, 218, 0.35);
@@ -425,7 +425,7 @@
     crossCost: 0.4,        // seconds per mph of crosswind above that
     gustFree: 20,          // mph peak gust before chop starts costing time
     gustCost: 0.3,         // seconds per mph of gust above that
-    band: 5                // seconds either side of a typical day that still counts as Typical
+    band: 1.25             // seconds per 500 m either side of a typical day that still counts as Typical
   };
 
   // Median monthly flow at Little Falls (USGS 01646500), 1996–2025, Jan..Dec, in cfs.
@@ -705,7 +705,7 @@
     const a = Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin((lo2 - lo1) / 2) ** 2;
     return {
       bearing: (Math.atan2(y, x) * 180 / Math.PI + 360) % 360,
-      meters: 2 * 6371000 * Math.asin(Math.sqrt(a))
+      meters: 2000   // race distance; the coordinates above only set the heading
     };
   })();
 
@@ -774,7 +774,10 @@
         text: q >= median ? 'above-normal river flow' : 'below-normal river flow' }
     ].filter(p => Math.abs(p.s) >= 1.5).sort((a, b) => Math.abs(b.s) - Math.abs(a.s));
 
-    const label = diff <= -MODEL.band ? 'FAST' : diff >= MODEL.band ? 'SLOW' : 'TYPICAL';
+    // Differences are reported per 500 m split, the way crews read them
+    const perSplit = (d) => d * 500 / COURSE.meters;
+    const splitDiff = perSplit(diff);
+    const label = splitDiff <= -MODEL.band ? 'FAST' : splitDiff >= MODEL.band ? 'SLOW' : 'TYPICAL';
     const helps = parts.filter(p => p.s < 0).map(p => p.text);
     const hurts = parts.filter(p => p.s > 0).map(p => p.text);
     const why = [
@@ -785,16 +788,15 @@
     // Versus flat, still water with no wind (a typical Potomac day is already faster)
     const flat = COURSE.meters / MODEL.boatSpeed;
     const flatDiff = courseSeconds({ windAlong: windMs, cross: crossMph, gust: w.gust, flow: q, tide: tf }) - flat;
-    const flatSecs = Math.round(Math.abs(flatDiff));
-    const vsFlat = flatSecs < 1 ? 'Even with flatwater'
-      : `About ${flatSecs} s ${flatDiff < 0 ? 'faster' : 'slower'} than flatwater`;
-
-    const secs = Math.round(Math.abs(diff));
-    const vs = secs < 1 ? 'About the same as a typical day'
-      : `About ${secs} s ${diff < 0 ? 'faster' : 'slower'} than a typical ${new Date(key + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long' })} day`;
+    // "1.4 s/500 faster", rounded to a tenth
+    const split = (d) => { const v = Math.abs(perSplit(d)); return v < 0.05 ? null : `${v.toFixed(1)} s/500 ${d < 0 ? 'faster' : 'slower'}`; };
+    const vsFlat = split(flatDiff) ? `${split(flatDiff)} than flatwater` : 'Even with flatwater';
+    const vs = split(diff)
+      ? `${split(diff)} than a typical ${new Date(key + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long' })} day`
+      : 'About the same as a typical day';
 
     // Short forms for the Today box's label / value rows
-    const shortSecs = (d) => { const s = Math.round(Math.abs(d)); return s < 1 ? 'Even' : `${s} s ${d < 0 ? 'faster' : 'slower'}`; };
+    const shortSecs = (d) => split(d) || 'Even';
     const shortText = (t) => cap(t.replace('above-normal river flow', 'high flow').replace('below-normal river flow', 'low flow'));
     const monthShort = new Date(key + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short' });
     const short = {
@@ -973,9 +975,15 @@
         maxZoom: 19, maxNativeZoom: 16,
         attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'
       }).addTo(map);
-      L.circleMarker(TBC, { radius: 5, color: '#0b1e2d', weight: 2, fillColor: '#74b0da', fillOpacity: 1 })
-        .bindTooltip('Thompson Boat Center', { permanent: true, direction: 'left', offset: [-6, 0], className: 'tbc-label' })
-        .addTo(map);
+      // Boathouses: [lat, lon], label, which side of the dot the label sits on
+      [
+        [TBC, 'Thompson Boat Center', 'left', [-6, 0]],
+        [[38.9041311, -77.0701648], 'Potomac Boat Club', 'top', [0, -6]]
+      ].forEach(([pos, name, dir, offset]) => {
+        L.circleMarker(pos, { radius: 5, color: '#0b1e2d', weight: 2, fillColor: '#74b0da', fillOpacity: 1 })
+          .bindTooltip(name, { permanent: true, direction: dir, offset, className: 'tbc-label' })
+          .addTo(map);
+      });
 
       canvas = document.getElementById('wind-canvas');
       ctx = canvas.getContext('2d');
@@ -1080,7 +1088,7 @@
     note.classList.toggle('error', failed.length > 0);
     note.innerHTML = (failed.length ? `Couldn’t load ${failed.join(', ')} right now. ` : '')
       + `Updated ${updated}. Temperature, UV, sustained wind and direction are 3&ndash;6 PM averages; gusts are the peak; rain chance is the highest hourly chance and rain amount is the 3&ndash;6 PM total. River forecasts are for 4:30 PM.`
-      + `<br>Race course: ${fmtInt(COURSE.meters)} m downstream, heading ${compass(COURSE.bearing)}. Rated against a typical day for the month (median river flow, no wind, slack tide), which is already faster than flatwater. Fast or Slow means at least ${MODEL.band} s different for an eight. These are estimates from flow, tide and wind, not yet checked against race results.`
+      + `<br>Race course: ${fmtInt(COURSE.meters)} m downstream, heading ${compass(COURSE.bearing)}. Rated against a typical day for the month (median river flow, no wind, slack tide), which is already faster than flatwater. Splits are per 500 m for an eight; Fast or Slow means at least ${MODEL.band} s/500 different from typical. These are estimates from flow, tide and wind, not yet checked against race results.`
       + `<br>Sources: Open-Meteo (NOAA models), NWS, NOAA tide station ${TIDE_STATION} (Washington, DC), USGS ${USGS_SITE} and NWS river forecast (Little Falls).`;
   }
 
