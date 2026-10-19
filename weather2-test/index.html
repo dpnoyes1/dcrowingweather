@@ -1058,7 +1058,7 @@
 
     // Download the map tiles other locations will need, so switching to one
     // shows a finished map instead of filling in piece by piece.
-    const preloaded = [];
+    const preloaded = new Map();
     function preloadTiles(locs) {
       if (!map) return;
       const box = map.getContainer();
@@ -1072,9 +1072,11 @@
         const hw = bw / s / 2 + 256, hh = bh / s / 2 + 256;    // plus a tile of margin
         for (let x = Math.floor((c.x - hw) / 256); x <= Math.floor((c.x + hw) / 256); x++) {
           for (let y = Math.floor((c.y - hh) / 256); y <= Math.floor((c.y + hh) / 256); y++) {
+            const url = `https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/${z}/${y}/${x}`;
+            if (preloaded.has(url)) continue;
             const img = new Image();
-            img.src = `https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/${z}/${y}/${x}`;
-            preloaded.push(img);
+            img.src = url;
+            preloaded.set(url, img);
           }
         }
       });
@@ -1252,13 +1254,18 @@
 
   // After the chosen location is on screen, load the other locations' data and
   // map tiles in the background so switching is instant.
-  let tilesPreloaded = false;
   function prefetchOthers() {
     const todayKey = etKey(Date.now());
     const others = Object.keys(LOCATIONS).filter(k => k !== state.loc);
     others.forEach(k => loadAll(k, todayKey).catch(console.error));
-    if (!tilesPreloaded) { tilesPreloaded = true; WindMap.preloadTiles(others.map(k => LOCATIONS[k])); }
+    WindMap.preloadTiles(others.map(k => LOCATIONS[k]));   // already-fetched tiles are skipped
   }
+  // A resize (e.g. rotating a phone) changes the zoom each map will use
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => WindMap.preloadTiles(Object.values(LOCATIONS)), 800);
+  });
 
   let runId = 0;
   async function run(force) {
