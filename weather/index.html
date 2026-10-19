@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
   /* Same palette and type as the main page (index.html) */
   :root {
@@ -91,19 +93,7 @@
 
   .window-note { display: block; font-size: 12px; color: var(--mist); margin-top: 4px; opacity: 0.8; }
 
-  .stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-top: 18px;
-  }
 
-  .stat {
-    background: var(--ink-3);
-    border-radius: 8px;
-    padding: 12px 12px 10px;
-    min-width: 0;
-  }
 
   .stat-label {
     display: block;
@@ -129,8 +119,6 @@
 
   .stat-value .unit { font-size: 0.55em; color: var(--mist); }
 
-  /* "HIGH 3:31 PM" is long; keep it inside a half-width phone tile */
-  .stat.wide-value .stat-value { font-size: 26px; white-space: normal; }
 
   .stat-detail { display: block; font-size: 12px; color: var(--mist); margin-top: 2px; line-height: 1.4; }
 
@@ -156,13 +144,103 @@
     vertical-align: middle;
   }
 
+  /* ---------- Today: five-box layout ---------- */
+  /* Phone order: Temp, Precip, Map, Race Course, Flow */
+  .today-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas: "temp" "precip" "map" "course" "flow";
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .box-temp   { grid-area: temp; }
+  .box-precip { grid-area: precip; }
+  .box-map    { grid-area: map; }
+  .box-course { grid-area: course; }
+  .box-flow   { grid-area: flow; }
+
+  .box {
+    background: var(--ink-3);
+    border-radius: 10px;
+    padding: 16px 16px 14px;
+    min-width: 0;
+  }
+  .box-title {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dawn);
+    margin-bottom: 8px;
+  }
+  .pair { display: flex; flex-wrap: wrap; gap: 14px 24px; }
+  .metric { flex: 1 1 120px; min-width: 0; }
+  .metric .stat-value { margin-top: 2px; }
+  /* "HIGH 3:31 PM" is wide, so tide and flow stack rather than share a row */
+  .box-flow .metric { flex-basis: 100%; }
+
+  .box-precip.has-flag { box-shadow: inset 0 3px 0 var(--partial); }
+  .box-precip .flags { margin-top: 12px; }
+  .box-precip .no-alerts { display: block; font-size: 12px; color: var(--mist); margin-top: 10px; }
+
+  .box-course.is-fast { box-shadow: inset 0 3px 0 var(--go); }
+  .box-course.is-slow { box-shadow: inset 0 3px 0 var(--stop); }
+  .box-course.is-typical { box-shadow: inset 0 3px 0 var(--dawn); }
+
+  /* Map with animated wind */
+  .box-map {
+    position: relative;
+    padding: 0;
+    overflow: hidden;
+    min-height: 340px;
+    background: #0d2233;
+  }
+  .wind-map, .wind-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .wind-map { background: #0d2233; z-index: 1; }
+  .wind-canvas { z-index: 2; pointer-events: none; }
+  /* Tint Esri's dark gray canvas toward the site's navy: river dark, land slate */
+  .wind-map .leaflet-tile-pane { filter: sepia(0.5) hue-rotate(170deg) saturate(1.8) brightness(1.05) contrast(1.1); }
+  .wind-map.leaflet-container { background: #0d2233; font-family: 'Inter', system-ui, sans-serif; }
+  .wind-map .leaflet-control-attribution {
+    background: rgba(11, 30, 45, 0.75);
+    color: var(--mist);
+    font-size: 9px;
+  }
+  .wind-map .leaflet-control-attribution a { color: var(--mist); }
+  .tbc-label {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    color: var(--fog);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  }
+  .tbc-label::before { display: none; }
+
+  .map-overlay {
+    position: absolute;
+    left: 12px;
+    bottom: 22px;
+    z-index: 3;
+    background: rgba(11, 30, 45, 0.82);
+    border: 1px solid rgba(116, 176, 218, 0.35);
+    border-radius: 8px;
+    padding: 10px 12px;
+    backdrop-filter: blur(3px);
+    pointer-events: none;
+    min-width: 150px;
+  }
+  .map-overlay .stat-value { font-size: 30px; margin-top: 2px; }
+  .map-overlay .stat-detail { font-size: 12px; }
+
   /* Race course rating */
   .course.fast { color: var(--go); }
   .course.slow { color: var(--stop); }
   .course.typical { color: var(--dawn); }
-  .stat.course-tile.is-fast { box-shadow: inset 0 3px 0 var(--go); }
-  .stat.course-tile.is-slow { box-shadow: inset 0 3px 0 var(--stop); }
-  .stat.course-tile.is-typical { box-shadow: inset 0 3px 0 var(--dawn); }
   .rows .v .course { font-weight: 600; letter-spacing: 0.04em; }
 
   /* Storm / front callouts */
@@ -242,14 +320,27 @@
     .today-card { padding: 36px 32px 32px; }
     .label, .date { font-size: 22px; }
     .window-note { font-size: 14px; }
-    .stats { grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 26px; }
-    .stat { padding: 16px 16px 14px; }
     .stat-value { font-size: 44px; }
-    .stat.wide-value .stat-value { font-size: 40px; }
     .forecast { grid-template-columns: repeat(2, 1fr); }
+
+    /* Tablet: four boxes in a 2x2, map full width underneath */
+    .today-grid {
+      grid-template-columns: 1fr 1fr;
+      grid-template-areas: "temp course" "precip flow" "map map";
+      gap: 14px;
+      margin-top: 26px;
+    }
+    .box { padding: 18px 18px 16px; }
+    .box-map { min-height: 380px; padding: 0; }
   }
 
   @media (min-width: 900px) {
+    /* Desktop: matches the sketch, map tall on the right */
+    .today-grid {
+      grid-template-columns: 1fr 1fr 1.25fr;
+      grid-template-areas: "temp course map" "precip flow map";
+    }
+    .box-map { min-height: 460px; }
     .forecast { grid-template-columns: repeat(5, 1fr); }
     .rows li { flex-direction: column; gap: 0; }
     .rows .v { text-align: left; }
@@ -273,8 +364,17 @@
         <span class="date" id="today-date"></span>
         <span class="window-note" id="today-window-note"></span>
       </div>
-      <div class="stats" id="today-stats"></div>
-      <div class="flags" id="today-flags"></div>
+      <div class="today-grid">
+        <div class="box box-temp" id="box-temp"></div>
+        <div class="box box-precip" id="box-precip"></div>
+        <div class="box box-map">
+          <div class="wind-map" id="wind-map" role="img" aria-label="Map of the Potomac by Thompson Boat Center with animated wind"></div>
+          <canvas class="wind-canvas" id="wind-canvas" aria-hidden="true"></canvas>
+          <div class="map-overlay" id="map-overlay"></div>
+        </div>
+        <div class="box box-course" id="box-course"></div>
+        <div class="box box-flow" id="box-flow"></div>
+      </div>
     </section>
 
     <h2 class="section-title">Next 5 days &middot; 3&ndash;6 PM</h2>
@@ -693,35 +793,179 @@
 
   const DASH = '&mdash;';
 
-  function todayStats(w, tide, riverNow, riverFc, course) {
-    const tile = (label, value, detail = '', cls = '') =>
-      `<div class="stat ${cls}"><span class="stat-label">${label}</span>`
-      + `<span class="stat-value">${value}</span>`
-      + (detail ? `<span class="stat-detail">${detail}</span>` : '') + '</div>';
+  const metric = (label, value, detail = '') =>
+    `<div class="metric"><span class="stat-label">${label}</span>`
+    + `<span class="stat-value">${value}</span>`
+    + (detail ? `<span class="stat-detail">${detail}</span>` : '') + '</div>';
 
+  function renderToday(w, tide, riverNow, riverFc, course, flags) {
+    const set = (id, html) => { document.getElementById(id).innerHTML = html; };
+
+    // Temp & UV
+    set('box-temp', '<span class="box-title">Temp &amp; UV</span><div class="pair">'
+      + metric('Temperature', w ? `${Math.round(w.temp)}<span class="unit">&deg;F</span>` : DASH,
+          w ? `${Math.round(w.tempFirst)}&deg; at 3 PM &rarr; ${Math.round(w.tempLast)}&deg; at 6 PM` : '')
+      + metric('UV Index', w ? `${Math.round(w.uv)}` : DASH, w ? uvLabel(w.uv) : '')
+      + '</div>');
+
+    // Precipitation & advisories (NWS alerts plus storm / front notes)
+    const precip = document.getElementById('box-precip');
+    precip.classList.toggle('has-flag', flags.length > 0);
+    set('box-precip', '<span class="box-title">Precipitation &amp; Advisories</span>'
+      + metric('Chance of Rain', w ? `${Math.round(w.precipChance)}<span class="unit">%</span>` : DASH,
+          w ? (w.precipAmount >= 0.01 ? `About ${w.precipAmount.toFixed(2)} in, 3&ndash;6 PM` : 'No measurable rain expected') : '')
+      + (flags.length
+          ? `<div class="flags">${flags.map(f => `<div class="flag">${f}</div>`).join('')}</div>`
+          : '<span class="no-alerts">No NOAA advisories or storm signals for 3&ndash;6 PM</span>'));
+
+    // Race course
+    const box = document.getElementById('box-course');
+    box.classList.remove('is-fast', 'is-slow', 'is-typical');
+    if (course) box.classList.add('is-' + course.cls);
+    set('box-course', '<span class="box-title">Race Course Conditions</span>'
+      + metric('Downstream 2K', course ? `<span class="course ${course.cls}">${course.label}</span>` : DASH,
+          course ? `${course.vs}<br>${course.vsFlat}<br>${course.why}` : 'Needs the wind forecast'));
+
+    // Tide & flow
     const riverDetail = riverNow
       ? `USGS Little Falls &middot; ${clock(etStamp(riverNow.ms).slice(11))}`
         + (riverFc != null ? `<br>Forecast 4:30 PM: ${fmtInt(riverFc)}` : '')
       : (riverFc != null ? 'NWS forecast for 4:30 PM' : 'Unavailable');
     const riverValue = riverNow ? riverNow.cfs : riverFc;
+    set('box-flow', '<span class="box-title">Tide &amp; Flow</span><div class="pair">'
+      + metric('Next Tide', tide ? tide.short : DASH, tide ? tide.flow : 'Unavailable')
+      + metric('River Flow', riverValue != null ? `${fmtInt(riverValue)}<span class="unit">cfs</span>` : DASH, riverDetail)
+      + '</div>');
 
-    return [
-      tile('Temperature', w ? `${Math.round(w.temp)}<span class="unit">&deg;F</span>` : DASH,
-        w ? `${Math.round(w.tempFirst)}&deg; at 3 PM &rarr; ${Math.round(w.tempLast)}&deg; at 6 PM` : ''),
-      tile('Precipitation', w ? `${Math.round(w.precipChance)}<span class="unit">%</span>` : DASH,
-        w ? (w.precipAmount >= 0.01 ? `About ${w.precipAmount.toFixed(2)} in` : 'No measurable rain expected') : ''),
-      tile('UV Index', w ? `${Math.round(w.uv)}` : DASH, w ? uvLabel(w.uv) : ''),
-      tile('Wind / Gusts', w ? `${Math.round(w.wind)}<span class="unit">/</span>${Math.round(w.gust)}<span class="unit">mph</span>` : DASH,
-        w ? `Sustained ${Math.round(w.wind)} mph average &middot; gusts to ${Math.round(w.gust)}` : ''),
-      tile('Wind Direction', w && w.dir != null ? `${arrowSvg(w.dir)}${compass(w.dir)}` : DASH,
-        w && w.dir != null ? `From the ${compass(w.dir)} (${Math.round(w.dir)}&deg;)` : ''),
-      tile('Next Tide', tide ? tide.short : DASH, tide ? tide.flow : 'Unavailable', 'wide-value'),
-      tile('River Flow', riverValue != null ? `${fmtInt(riverValue)}<span class="unit">cfs</span>` : DASH, riverDetail),
-      tile('Race Course', course ? `<span class="course ${course.cls}">${course.label}</span>` : DASH,
-        course ? `${course.vs}<br>${course.vsFlat}<br>${course.why}` : 'Needs the wind forecast',
-        'course-tile' + (course ? ' is-' + course.cls : ''))
-    ].join('');
+    // Map overlay
+    set('map-overlay', w && w.dir != null
+      ? metric('Wind, 3&ndash;6 PM', `${arrowSvg(w.dir)}${Math.round(w.wind)}<span class="unit">/</span>${Math.round(w.gust)}<span class="unit">mph</span>`,
+          `Sustained ${Math.round(w.wind)} &middot; gusts ${Math.round(w.gust)}<br>From the ${compass(w.dir)} (${Math.round(w.dir)}&deg;)`)
+      : metric('Wind', DASH, 'Unavailable'));
+    WindMap.setWind(w && w.dir != null ? { dir: w.dir, mph: w.wind, gust: w.gust } : null);
   }
+
+  // ---------- Map with windy.com-style wind streaks ----------
+  // The forecast is one wind for the whole area, so every streak moves the
+  // same way; speed and density scale with the wind.
+  const WindMap = (() => {
+    const TBC = [38.900527, -77.0583371];   // Thompson Boat Center
+    let map = null, canvas, ctx, particles = [], wind = null, raf = null, w = 0, h = 0, dpr = 1;
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function frame() {
+      // Place Thompson's on the right, a bit above middle (80% across, 38% down).
+      // The river runs up-left from there to Key Bridge and Three Sisters and down
+      // past Roosevelt Island, so this keeps most of the frame on the water.
+      // Zoom so about 2.4 km shows to the left of the boathouse at any box size.
+      if (!map) return;
+      const box = map.getContainer();
+      const bw = box.clientWidth, bh = box.clientHeight;
+      if (!bw || !bh) return;
+      const metersPerPxAtZ0 = 156543.03 * Math.cos(TBC[0] * Math.PI / 180);
+      const zoom = Math.log2((0.8 * bw * metersPerPxAtZ0) / 2400);
+      map.setView(TBC, Math.min(17, Math.max(12.5, zoom)), { animate: false });
+      map.panBy([-0.3 * bw, 0.12 * bh], { animate: false });
+    }
+
+    function sizeCanvas() {
+      const r = canvas.getBoundingClientRect();
+      dpr = window.devicePixelRatio || 1;
+      w = r.width; h = r.height;
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      seed();
+    }
+
+    function seed() {
+      const count = wind ? Math.round(Math.min(900, (w * h) / 900) * (0.5 + Math.min(wind.mph, 20) / 40)) : 0;
+      particles = Array.from({ length: count }, () => spawn(true));
+    }
+
+    function spawn(anyAge) {
+      return { x: Math.random() * w, y: Math.random() * h, age: anyAge ? Math.random() * 80 : 0, life: 50 + Math.random() * 60 };
+    }
+
+    function tick() {
+      raf = requestAnimationFrame(tick);
+      if (!wind || !w) return;
+      // Fade the previous frame so streaks leave trails
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'source-over';
+
+      const toward = (wind.dir + 180) * Math.PI / 180;     // direction the air moves
+      const speed = 0.5 + Math.min(wind.mph, 30) * 0.14;    // px per frame
+      const vx = Math.sin(toward) * speed, vy = -Math.cos(toward) * speed;
+      const gustiness = Math.max(0, (wind.gust - wind.mph) / Math.max(wind.mph, 1));
+
+      ctx.lineWidth = 1.4;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(230, 242, 252, 0.85)';
+      ctx.beginPath();
+      for (const p of particles) {
+        // A little wobble, more on gusty days
+        const jitter = 1 + (Math.random() - 0.5) * 0.6 * Math.min(gustiness, 1);
+        const nx = p.x + vx * jitter, ny = p.y + vy * jitter;
+        ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny);
+        p.x = nx; p.y = ny; p.age++;
+        if (p.age > p.life || p.x < -5 || p.y < -5 || p.x > w + 5 || p.y > h + 5) Object.assign(p, spawn(false));
+      }
+      ctx.stroke();
+    }
+
+    function drawStatic() {
+      // Reduced motion: a still grid of arrows instead of moving streaks
+      ctx.clearRect(0, 0, w, h);
+      if (!wind) return;
+      const toward = (wind.dir + 180) * Math.PI / 180;
+      ctx.strokeStyle = 'rgba(160, 205, 235, 0.7)'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 1.5;
+      for (let y = 30; y < h; y += 60) for (let x = 30; x < w; x += 60) {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(toward);
+        ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(0, -12); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(-5, -6); ctx.lineTo(5, -6); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function init() {
+      if (map || !window.L) return;
+      map = L.map('wind-map', {
+        zoomControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+        boxZoom: false, keyboard: false, touchZoom: false, tap: false, zoomSnap: 0
+      });
+      // Esri's Dark Gray canvas (no key needed), tinted with the CSS above
+      L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19, maxNativeZoom: 16,
+        attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'
+      }).addTo(map);
+      L.circleMarker(TBC, { radius: 5, color: '#0b1e2d', weight: 2, fillColor: '#74b0da', fillOpacity: 1 })
+        .bindTooltip('Thompson Boat Center', { permanent: true, direction: 'left', offset: [-6, 0], className: 'tbc-label' })
+        .addTo(map);
+
+      canvas = document.getElementById('wind-canvas');
+      ctx = canvas.getContext('2d');
+      frame(); sizeCanvas();
+
+      let t;
+      const onResize = () => { clearTimeout(t); t = setTimeout(() => { map.invalidateSize(); frame(); sizeCanvas(); if (reduceMotion) drawStatic(); }, 150); };
+      window.addEventListener('resize', onResize);
+      if (window.ResizeObserver) new ResizeObserver(onResize).observe(map.getContainer());
+      if (!reduceMotion) tick();
+    }
+
+    return {
+      init,
+      setWind(next) {
+        init();
+        wind = next;
+        if (!canvas) return;
+        seed();
+        if (reduceMotion) drawStatic();
+      }
+    };
+  })();
 
   function dayCard(key, w, tide, riverFc, flags, course, riverHeld) {
     const row = (k, v, small = '') => `<li><span class="k">${k}</span><span class="v">${v}${small ? `<small>${small}</small>` : ''}</span></li>`;
@@ -787,9 +1031,7 @@
     const nowStamp = etStamp(now);
     document.getElementById('today-window-note').textContent =
       nowStamp.slice(11) >= `${WINDOW_END}:00` ? 'Practice window has passed. Showing this afternoon’s forecast.' : '';
-    document.getElementById('today-stats').innerHTML = todayStats(t.w, t.tide, riverNow, t.river, t.course);
-    document.getElementById('today-flags').innerHTML = t.flags.map(f => `<div class="flag">${f}</div>`).join('');
-    document.getElementById('today-card').classList.toggle('has-flag', t.flags.length > 0);
+    renderToday(t.w, t.tide, riverNow, t.river, t.course, t.flags);
 
     // Next 5 days
     document.getElementById('forecast').innerHTML =
