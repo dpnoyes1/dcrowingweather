@@ -477,7 +477,9 @@
       // Wide, deep river here: flow barely moves the water, tide does most of it
       course: { start: [38.79928976829386, -77.03877487397294], finish: [38.8118342155035, -77.0369929878263],
                 sense: -1, channelArea: 9000, tidePeak: 0.25 },
-      markers: [[[38.8120961, -77.0378564], 'Dee Campbell Rowing Center', 'right', [6, 0]]]
+      markers: [[[38.8120961, -77.0378564], 'Dee Campbell Rowing Center', 'right', [6, 0]]],
+      // Map center and how many meters show across the box
+      view: { center: [38.8045, -77.0300], width: 4000 }
     },
     anacostia: {
       label: 'Anacostia', place: 'Anacostia Community Boathouse',
@@ -487,7 +489,8 @@
       // Very little river flow; tide is effectively the whole current
       course: { start: [38.86922707532398, -76.9943412213138], finish: [38.87751302674171, -76.9742139242965],
                 sense: -1, channelArea: 1500, tidePeak: 0.12 },
-      markers: [[[38.8785995, -76.9756351], 'Anacostia Community Boathouse', 'top', [0, -6]]]
+      markers: [[[38.8785995, -76.9756351], 'Anacostia Community Boathouse', 'top', [0, -6]]],
+      view: { center: [38.8735, -76.9840], width: 3400 }
     },
     occoquan: {
       label: 'Occoquan', place: 'Sandy Run Regional Park',
@@ -500,7 +503,8 @@
       markers: [
         [[38.7103173, -77.3039037], 'Sandy Run Regional Park', 'top', [0, -6]],
         [[38.6966835, -77.3178062], 'Oxford Boathouse', 'bottom', [0, 6]]
-      ]
+      ],
+      view: { center: [38.7020, -77.2985], width: 4600 }
     }
   };
 
@@ -1016,9 +1020,11 @@
         map.setView(f.anchor, Math.min(17, Math.max(12.5, zoom)), { animate: false });
         map.panBy([-(f.fx - 0.5) * bw, (0.5 - f.fy) * bh], { animate: false });
       } else {
-        // Fit the course and boathouses, leaving room for the wind box at bottom left
-        const pts = [loc.course.start, loc.course.finish, ...loc.markers.map(m => m[0])];
-        map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [40, 40], paddingBottomRight: [40, 150], animate: false, maxZoom: 16 });
+        // Set center, zoomed so `width` meters fit across the box
+        const v = loc.view;
+        const metersPerPxAtZ0 = 156543.03 * Math.cos(v.center[0] * Math.PI / 180);
+        const zoom = Math.log2((bw * metersPerPxAtZ0) / v.width);
+        map.setView(v.center, Math.min(16, Math.max(11, zoom)), { animate: false });
       }
     }
 
