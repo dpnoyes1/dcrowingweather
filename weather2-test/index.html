@@ -733,7 +733,7 @@
     const r = Math.PI / 180;
     const [y, m, d] = key.split('-').map(Number);
     const jd = Date.UTC(y, m - 1, d, 12) / 86400000 + 2440587.5;
-    const n = Math.ceil(jd - 2451545.0 + 0.0008);
+    const n = Math.floor(jd - 2451545.0 + 0.0008);   // whole days since J2000 at this date's noon
     const Jstar = n - lon / 360;
     const M = (357.5291 + 0.98560028 * Jstar) % 360;
     const C = 1.9148 * Math.sin(M * r) + 0.02 * Math.sin(2 * M * r) + 0.0003 * Math.sin(3 * M * r);
