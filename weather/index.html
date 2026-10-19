@@ -156,6 +156,15 @@
     vertical-align: middle;
   }
 
+  /* Race course rating */
+  .course.fast { color: var(--go); }
+  .course.slow { color: var(--stop); }
+  .course.typical { color: var(--dawn); }
+  .stat.course-tile.is-fast { box-shadow: inset 0 3px 0 var(--go); }
+  .stat.course-tile.is-slow { box-shadow: inset 0 3px 0 var(--stop); }
+  .stat.course-tile.is-typical { box-shadow: inset 0 3px 0 var(--dawn); }
+  .rows .v .course { font-weight: 600; letter-spacing: 0.04em; }
+
   /* Storm / front callouts */
   .flags { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
   .flags:empty { display: none; }
@@ -286,6 +295,28 @@
   const WINDOW_START = 15, WINDOW_END = 18;   // 3 PM to 6 PM
   const FORECAST_DAYS = 5;
   const REFRESH_MINUTES = 15;
+
+  // Race course: always rowed downstream, start -> finish
+  const COURSE_START  = [38.903394617433456, -77.08442775640597];
+  const COURSE_FINISH = [38.8999463567322,   -77.0613538203245];
+
+  // Course model. These are physics-based estimates, not calibrated to race
+  // results yet; adjust them here as you learn how the course actually plays.
+  const MODEL = {
+    boatSpeed: 2000 / 375, // m/s: an eight rowing 6:15 for 2K in flat, calm water
+    aeroShare: 0.08,       // share of a crew's effort spent pushing through still air
+    channelArea: 1800,     // m²: rough river cross-section along the course
+    tidePeak: 0.15,        // m/s: tidal current at mid-ebb / mid-flood
+    crossFree: 8,          // mph of crosswind before it starts costing time
+    crossCost: 0.4,        // seconds per mph of crosswind above that
+    gustFree: 20,          // mph peak gust before chop starts costing time
+    gustCost: 0.3,         // seconds per mph of gust above that
+    band: 5                // seconds either side of a typical day that still counts as Typical
+  };
+
+  // Median monthly flow at Little Falls (USGS 01646500), 1996–2025, Jan..Dec, in cfs.
+  // A "typical" day = this month's median flow, no wind, slack tide.
+  const MEDIAN_FLOW = [12360, 14360, 19020, 16890, 17505, 8733, 3823, 3156, 2518, 4177, 5073, 8492];
   // ---------------------------------------------------------------
 
   // ---------- Time helpers (everything is pinned to Eastern) ----------
@@ -548,6 +579,111 @@
     return flags;
   }
 
+  // ---------- Race course model ----------
+
+  const toRad = (d) => d * Math.PI / 180;
+
+  // Heading (degrees true) and length (meters) of the course
+  const COURSE = (() => {
+    const [la1, lo1] = COURSE_START.map(toRad), [la2, lo2] = COURSE_FINISH.map(toRad);
+    const y = Math.sin(lo2 - lo1) * Math.cos(la2);
+    const x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(lo2 - lo1);
+    const a = Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin((lo2 - lo1) / 2) ** 2;
+    return {
+      bearing: (Math.atan2(y, x) * 180 / Math.PI + 360) % 360,
+      meters: 2 * 6371000 * Math.asin(Math.sqrt(a))
+    };
+  })();
+
+  // How hard the tide pushes during practice, from -1 (mid-flood, against us)
+  // to +1 (mid-ebb, with us). Tidal current is strongest halfway between a high
+  // and a low and near zero at the turn, so each 15-minute sample is weighted
+  // by where it sits between the surrounding tide events.
+  function tideFactor(tides, key) {
+    const mins = (stamp) => Date.parse(stamp.replace(' ', 'T') + 'Z') / 60000;
+    const ev = tides.map(t => ({ m: mins(t.t), type: t.type }));
+    const samples = [];
+    for (let h = WINDOW_START * 60; h <= WINDOW_END * 60; h += 15) {
+      const m = mins(`${key} ${String(Math.floor(h / 60)).padStart(2, '0')}:${String(h % 60).padStart(2, '0')}`);
+      const prev = [...ev].reverse().find(e => e.m <= m), next = ev.find(e => e.m > m);
+      if (!prev || !next) continue;
+      const frac = (m - prev.m) / (next.m - prev.m);
+      samples.push((next.type === 'L' ? 1 : -1) * Math.sin(Math.PI * frac));
+    }
+    return samples.length ? avg(samples) : null;
+  }
+
+  // Boat speed through the water (m/s) with a wind component along the course
+  // (m/s, positive = tailwind), holding the crew's power constant.
+  function boatSpeed(windAlong) {
+    const v0 = MODEL.boatSpeed, a = MODEL.aeroShare, w = windAlong / v0;
+    const power = (x) => (1 - a) * x ** 3 + a * x * (x - w) * Math.abs(x - w);
+    let lo = 0.5, hi = 1.6;
+    for (let i = 0; i < 50; i++) { const mid = (lo + hi) / 2; if (power(mid) < 1) lo = mid; else hi = mid; }
+    return v0 * (lo + hi) / 2;
+  }
+
+  // Seconds for the course under the given conditions
+  function courseSeconds({ windAlong = 0, cross = 0, gust = 0, flow, tide = 0 }) {
+    const current = (flow / 35.3147) / MODEL.channelArea + MODEL.tidePeak * tide;
+    let t = COURSE.meters / (boatSpeed(windAlong) + current);
+    t += Math.max(0, cross - MODEL.crossFree) * MODEL.crossCost;
+    t += Math.max(0, gust - MODEL.gustFree) * MODEL.gustCost;
+    return t;
+  }
+
+  // Fast / Typical / Slow versus a typical day for this month
+  function coursePrediction(w, tide, flow, key) {
+    if (!w || w.dir == null) return null;
+    const month = Number(key.slice(5, 7));
+    const median = MEDIAN_FLOW[month - 1];
+    const q = flow != null ? flow : median;
+    const tf = tide != null ? tide : 0;
+
+    const rel = toRad((w.dir + 180) % 360 - COURSE.bearing);   // wind blows TOWARD dir+180
+    const alongMph = w.wind * Math.cos(rel);
+    const crossMph = Math.abs(w.wind * Math.sin(rel));
+    const windMs = alongMph * 0.44704;
+
+    const typical = courseSeconds({ flow: median });
+    const diff = courseSeconds({ windAlong: windMs, cross: crossMph, gust: w.gust, flow: q, tide: tf }) - typical;
+
+    // What each factor contributes on its own (negative = faster)
+    const parts = [
+      { s: courseSeconds({ windAlong: windMs, cross: crossMph, gust: w.gust, flow: median }) - typical,
+        text: alongMph >= 1 ? `${Math.round(alongMph)} mph tailwind`
+            : alongMph <= -1 ? `${Math.round(-alongMph)} mph headwind`
+            : `${Math.round(crossMph)} mph crosswind` },
+      { s: courseSeconds({ flow: median, tide: tf }) - typical,
+        text: tf > 0 ? 'outgoing tide' : 'incoming tide' },
+      { s: courseSeconds({ flow: q }) - typical,
+        text: q >= median ? 'above-normal river flow' : 'below-normal river flow' }
+    ].filter(p => Math.abs(p.s) >= 1.5).sort((a, b) => Math.abs(b.s) - Math.abs(a.s));
+
+    const label = diff <= -MODEL.band ? 'FAST' : diff >= MODEL.band ? 'SLOW' : 'TYPICAL';
+    const helps = parts.filter(p => p.s < 0).map(p => p.text);
+    const hurts = parts.filter(p => p.s > 0).map(p => p.text);
+    const why = [
+      helps.length ? cap(helps.join(', ')) + ' help' + (helps.length === 1 ? 's' : '') : '',
+      hurts.length ? (helps.length ? hurts.join(', ') : cap(hurts.join(', '))) + ' slow' + (hurts.length === 1 ? 's' : '') + ' it' : ''
+    ].filter(Boolean).join('; ') || 'Close to normal conditions';
+
+    // Versus flat, still water with no wind (a typical Potomac day is already faster)
+    const flat = COURSE.meters / MODEL.boatSpeed;
+    const flatDiff = courseSeconds({ windAlong: windMs, cross: crossMph, gust: w.gust, flow: q, tide: tf }) - flat;
+    const flatSecs = Math.round(Math.abs(flatDiff));
+    const vsFlat = flatSecs < 1 ? 'Even with flatwater'
+      : `About ${flatSecs} s ${flatDiff < 0 ? 'faster' : 'slower'} than flatwater`;
+
+    const secs = Math.round(Math.abs(diff));
+    const vs = secs < 1 ? 'About the same as a typical day'
+      : `About ${secs} s ${diff < 0 ? 'faster' : 'slower'} than a typical ${new Date(key + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long' })} day`;
+
+    return { label, diff, vs, vsFlat, why, cls: label.toLowerCase() };
+  }
+
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
   // ---------- Rendering ----------
 
   // Arrow points the way the wind is blowing TO (downwind)
@@ -557,7 +693,7 @@
 
   const DASH = '&mdash;';
 
-  function todayStats(w, tide, riverNow, riverFc) {
+  function todayStats(w, tide, riverNow, riverFc, course) {
     const tile = (label, value, detail = '', cls = '') =>
       `<div class="stat ${cls}"><span class="stat-label">${label}</span>`
       + `<span class="stat-value">${value}</span>`
@@ -575,16 +711,19 @@
       tile('Precipitation', w ? `${Math.round(w.precipChance)}<span class="unit">%</span>` : DASH,
         w ? (w.precipAmount >= 0.01 ? `About ${w.precipAmount.toFixed(2)} in` : 'No measurable rain expected') : ''),
       tile('UV Index', w ? `${Math.round(w.uv)}` : DASH, w ? uvLabel(w.uv) : ''),
-      tile('Sustained Wind', w ? `${Math.round(w.wind)}<span class="unit">mph</span>` : DASH, w ? 'Average, 3&ndash;6 PM' : ''),
-      tile('Wind Gusts', w ? `${Math.round(w.gust)}<span class="unit">mph</span>` : DASH, w ? `Peak &middot; average ${Math.round(w.gustAvg)} mph` : ''),
+      tile('Wind / Gusts', w ? `${Math.round(w.wind)}<span class="unit">/</span>${Math.round(w.gust)}<span class="unit">mph</span>` : DASH,
+        w ? `Sustained ${Math.round(w.wind)} mph average &middot; gusts to ${Math.round(w.gust)}` : ''),
       tile('Wind Direction', w && w.dir != null ? `${arrowSvg(w.dir)}${compass(w.dir)}` : DASH,
         w && w.dir != null ? `From the ${compass(w.dir)} (${Math.round(w.dir)}&deg;)` : ''),
       tile('Next Tide', tide ? tide.short : DASH, tide ? tide.flow : 'Unavailable', 'wide-value'),
-      tile('River Flow', riverValue != null ? `${fmtInt(riverValue)}<span class="unit">cfs</span>` : DASH, riverDetail)
+      tile('River Flow', riverValue != null ? `${fmtInt(riverValue)}<span class="unit">cfs</span>` : DASH, riverDetail),
+      tile('Race Course', course ? `<span class="course ${course.cls}">${course.label}</span>` : DASH,
+        course ? `${course.vs}<br>${course.vsFlat}<br>${course.why}` : 'Needs the wind forecast',
+        'course-tile' + (course ? ' is-' + course.cls : ''))
     ].join('');
   }
 
-  function dayCard(key, w, tide, riverFc, flags) {
+  function dayCard(key, w, tide, riverFc, flags, course, riverHeld) {
     const row = (k, v, small = '') => `<li><span class="k">${k}</span><span class="v">${v}${small ? `<small>${small}</small>` : ''}</span></li>`;
     return `<article class="day${flags.length ? ' has-flag' : ''}">
       <div class="day-head">
@@ -595,13 +734,14 @@
         ${row('Temp', w ? `${Math.round(w.temp)}&deg;F` : DASH)}
         ${row('Precip', w ? `${Math.round(w.precipChance)}%` : DASH, w && w.precipAmount >= 0.01 ? `${w.precipAmount.toFixed(2)} in` : '')}
         ${row('UV', w ? `${Math.round(w.uv)} &middot; ${uvLabel(w.uv)}` : DASH)}
-        ${row('Wind', w ? `${Math.round(w.wind)} mph` : DASH)}
-        ${row('Gusts', w ? `${Math.round(w.gust)} mph` : DASH)}
+        ${row('Wind', w ? `${Math.round(w.wind)} mph` : DASH, w ? `gusts to ${Math.round(w.gust)}` : '')}
         ${row('Direction', w && w.dir != null ? `${compass(w.dir)} ${arrowSvg(w.dir)}` : DASH)}
         ${row('Next tide', tide ? tide.headline : DASH, tide ? tide.flow : '')}
         ${riverFc != null
           ? row('River', `${fmtInt(riverFc)} cfs <span class="tag">fcst</span>`)
           : row('River', DASH, 'Beyond NWS river forecast')}
+        ${row('Course', course ? `<span class="course ${course.cls}">${course.label}</span>` : DASH,
+          course ? `${course.vs}. ${course.why}.` + (riverHeld ? ' Flow held at today’s level.' : '') : '')}
       </ul>
       <div class="flags">${flags.map(f => `<div class="flag">${f}</div>`).join('')}</div>
     </article>`;
@@ -625,12 +765,18 @@
 
     const tideList = tides && tides.predictions ? tides.predictions : null;
 
-    const days = keys.map(key => {
+    const days = keys.map((key, i) => {
       const w = wx ? summarizeWeather(wx, key) : null;
+      const river = riverAt(riverFc, etToMs(key, 16, 30));
+      // Course flow: today's actual reading, else the NWS forecast, else hold
+      // today's reading for days past the end of the river forecast.
+      let courseFlow = river, riverHeld = false;
+      if (i === 0 && riverNow) courseFlow = riverNow.cfs;
+      else if (courseFlow == null && riverNow) { courseFlow = riverNow.cfs; riverHeld = true; }
       return {
-        key, w,
+        key, w, river, riverHeld,
         tide: tideList ? summarizeTide(tideList, key) : null,
-        river: riverAt(riverFc, etToMs(key, 16, 30)),
+        course: coursePrediction(w, tideList ? tideFactor(tideList, key) : null, courseFlow, key),
         flags: flagsFor(key, w, nws)
       };
     });
@@ -641,13 +787,13 @@
     const nowStamp = etStamp(now);
     document.getElementById('today-window-note').textContent =
       nowStamp.slice(11) >= `${WINDOW_END}:00` ? 'Practice window has passed. Showing this afternoon’s forecast.' : '';
-    document.getElementById('today-stats').innerHTML = todayStats(t.w, t.tide, riverNow, t.river);
+    document.getElementById('today-stats').innerHTML = todayStats(t.w, t.tide, riverNow, t.river, t.course);
     document.getElementById('today-flags').innerHTML = t.flags.map(f => `<div class="flag">${f}</div>`).join('');
     document.getElementById('today-card').classList.toggle('has-flag', t.flags.length > 0);
 
     // Next 5 days
     document.getElementById('forecast').innerHTML =
-      days.slice(1).map(d => dayCard(d.key, d.w, d.tide, d.river, d.flags)).join('');
+      days.slice(1).map(d => dayCard(d.key, d.w, d.tide, d.river, d.flags, d.course, d.riverHeld)).join('');
 
     // Footer
     const failed = [];
@@ -659,6 +805,7 @@
     note.classList.toggle('error', failed.length > 0);
     note.innerHTML = (failed.length ? `Couldn’t load ${failed.join(', ')} right now. ` : '')
       + `Updated ${updated}. Temperature, UV, sustained wind and direction are 3&ndash;6 PM averages; gusts are the peak; rain chance is the highest hourly chance and rain amount is the 3&ndash;6 PM total. River forecasts are for 4:30 PM.`
+      + `<br>Race course: ${fmtInt(COURSE.meters)} m downstream, heading ${compass(COURSE.bearing)}. Rated against a typical day for the month (median river flow, no wind, slack tide), which is already faster than flatwater. Fast or Slow means at least ${MODEL.band} s different for an eight. These are estimates from flow, tide and wind, not yet checked against race results.`
       + `<br>Sources: Open-Meteo (NOAA models), NWS, NOAA tide station ${TIDE_STATION} (Washington, DC), USGS ${USGS_SITE} and NWS river forecast (Little Falls).`;
   }
 
