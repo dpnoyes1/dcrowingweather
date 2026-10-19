@@ -749,8 +749,8 @@
 
   // Daylight during the window. "Dark" is civil twilight (sun 6° below the
   // horizon), when there's no longer enough natural light to see well, not
-  // sunrise/sunset. Mornings show first light, evenings last light; afternoons
-  // only when last light comes before practice ends (winter).
+  // sunrise/sunset. Sunrise/sunset is the main figure, with first/last light
+  // under it; afternoons only when last light comes before practice ends (winter).
   function lightFor(key, loc, T, timeKey) {
     const sun = sunTimes(key, loc.lat, loc.lon, -0.833), civ = sunTimes(key, loc.lat, loc.lon, -6);
     if (!sun || !civ) return null;
@@ -759,12 +759,12 @@
     if (timeKey === 'morning') {
       const dawn = civ.rise;
       const note = dawn >= winE ? 'Dark the whole window' : dawn > winS ? `Dark until ${t(dawn)}` : 'Light the whole window';
-      return { label: 'First light', time: t(dawn), sub: `Sunrise ${t(sun.rise)}`, note };
+      return { label: 'Sunrise', time: t(sun.rise), sub: `First light ${t(dawn)}`, note };
     }
     if (timeKey === 'evening' || civ.set < winE) {
       const dusk = civ.set;
       const note = dusk <= winS ? 'Dark the whole window' : dusk < winE ? `Dark after ${t(dusk)}` : 'Light the whole window';
-      return { label: 'Last light', time: t(dusk), sub: `Sunset ${t(sun.set)}`, note };
+      return { label: 'Sunset', time: t(sun.set), sub: `Last light ${t(dusk)}`, note };
     }
     return null;
   }
