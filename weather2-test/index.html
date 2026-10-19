@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whitman Rowing Weather (test)</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  /* Same palette and type as the main page (index.html) */
+  :root {
+    --ink: #0b1e2d;      /* deep river navy - background */
+    --ink-2: #142b3d;    /* card panel */
+    --ink-3: #1b3549;    /* stat tile inside a card */
+    --mist: #93a9b8;     /* muted secondary text */
+    --fog: #eef2f4;      /* primary text on dark */
+    --dawn: #74b0da;     /* Whitman blue accent (Pantone 542C) */
+    --go: #00FF00;
+    --stop: #FF0000;
+    --partial: #FFA500;  /* used for storm / front flags */
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--ink);
+    color: var(--fog);
+    font-family: 'Inter', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 40px;
+  }
+
+  header { text-align: center; max-width: 480px; }
+
+  .eyebrow {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dawn);
+    margin: 0 0 6px;
+  }
+
+  h1 { font-size: 22px; font-weight: 500; margin: 0; color: var(--fog); }
+
+  .sub { font-size: 13px; color: var(--mist); margin: 6px 0 0; }
+
+  .horizon {
+    width: 100%;
+    max-width: 480px;
+    height: 2px;
+    margin: 22px 0 28px;
+    background: linear-gradient(90deg, transparent, var(--dawn), transparent);
+    background-size: 200% 100%;
+    animation: drift 6s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) { .horizon { animation: none; } }
+  @keyframes drift {
+    0%, 100% { background-position: 0% 0%; }
+    50% { background-position: 100% 0%; }
+  }
+
+  main { width: 100%; max-width: 480px; }
+
+  /* ---------- Today (main box) ---------- */
+  .today-card {
+    background: var(--ink-2);
+    border-radius: 12px;
+    border-top: 3px solid var(--dawn);
+    padding: 22px 16px 20px;
+  }
+  .today-card.has-flag { border-top-color: var(--partial); }
+
+  .card-head { text-align: center; }
+
+  .label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mist);
+  }
+
+  .date { display: block; font-size: 13px; color: var(--mist); margin-top: 2px; }
+
+  .window-note { display: block; font-size: 12px; color: var(--mist); margin-top: 4px; opacity: 0.8; }
+
+
+
+  .stat-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mist);
+  }
+
+  .stat-value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Bebas Neue', 'Inter', sans-serif;
+    font-size: 34px;
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+    margin-top: 4px;
+    color: var(--fog);
+    white-space: nowrap;
+  }
+
+  .stat-value .unit { font-size: 0.55em; color: var(--mist); }
+
+
+  .stat-detail { display: block; font-size: 12px; color: var(--mist); margin-top: 2px; line-height: 1.4; }
+
+  .arrow {
+    display: inline-block;
+    width: 0.8em;
+    height: 0.8em;
+    color: var(--dawn);
+    flex: none;
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dawn);
+    border: 1px solid rgba(116, 176, 218, 0.5);
+    border-radius: 4px;
+    padding: 1px 5px;
+    vertical-align: middle;
+  }
+
+  /* ---------- Today: five-box layout ---------- */
+  /* Phone order: Temp, Precip, Map, Race Course, Flow */
+  .today-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas: "temp" "precip" "map" "course" "flow";
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .box-temp   { grid-area: temp; }
+  .box-precip { grid-area: precip; }
+  .box-map    { grid-area: map; }
+  .box-course { grid-area: course; }
+  .box-flow   { grid-area: flow; }
+
+  .box {
+    background: var(--ink-3);
+    border-radius: 10px;
+    padding: 16px 16px 14px;
+    min-width: 0;
+  }
+  .box-title {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dawn);
+    margin-bottom: 8px;
+  }
+  .pair { display: flex; flex-wrap: wrap; gap: 14px 24px; }
+  .metric { flex: 1 1 120px; min-width: 0; }
+  .metric .stat-value { margin-top: 2px; }
+  /* "HIGH 3:31 PM" is wide, so tide and flow stack rather than share a row */
+  .box-flow .metric { flex-basis: 100%; }
+
+  .box-precip.has-flag { box-shadow: inset 0 3px 0 var(--partial); }
+  .box-precip .flags { margin-top: 12px; }
+  .box-precip .no-alerts { display: block; font-size: 12px; color: var(--mist); margin-top: 10px; }
+
+  /* Label / value rows under the course rating */
+  .facts { margin: 10px 0 0; }
+  .facts div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 6px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    font-size: 13px;
+  }
+  .facts dt { color: var(--mist); flex: none; }
+  .facts dd { margin: 0; color: var(--fog); font-weight: 500; text-align: right; }
+
+  .box-course.is-fast { box-shadow: inset 0 3px 0 var(--go); }
+  .box-course.is-slow { box-shadow: inset 0 3px 0 var(--stop); }
+  .box-course.is-typical { box-shadow: inset 0 3px 0 var(--dawn); }
+
+  /* Map with animated wind */
+  .box-map {
+    position: relative;
+    padding: 0;
+    overflow: hidden;
+    min-height: 340px;
+    background: #0d2233;
+  }
+  .wind-map, .wind-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .wind-map { background: #0d2233; z-index: 1; }
+  .wind-canvas { z-index: 2; pointer-events: none; }
+  /* Tint Esri's dark gray canvas toward the site's navy: river dark, land slate */
+  .wind-map .leaflet-tile-pane { filter: sepia(0.5) hue-rotate(170deg) saturate(1.8) brightness(1.05) contrast(1.1); }
+  .wind-map.leaflet-container { background: #0d2233; font-family: 'Inter', system-ui, sans-serif; }
+  .wind-map .leaflet-control-attribution {
+    background: rgba(11, 30, 45, 0.75);
+    color: var(--mist);
+    font-size: 9px;
+  }
+  .wind-map .leaflet-control-attribution a { color: var(--mist); }
+  .tbc-label {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    color: var(--fog);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  }
+  .tbc-label::before { display: none; }
+
+  .map-overlay {
+    position: absolute;
+    left: 12px;
+    bottom: 46px;   /* clear of the map credits strip, which can wrap to two lines */
+    z-index: 3;
+    background: rgba(11, 30, 45, 0.82);
+    border: 1px solid rgba(116, 176, 218, 0.35);
+    border-radius: 8px;
+    padding: 10px 12px;
+    backdrop-filter: blur(3px);
+    pointer-events: none;
+    min-width: 150px;
+  }
+  .map-overlay .stat-value { font-size: 30px; margin-top: 2px; }
+  .map-overlay .stat-detail { font-size: 12px; }
+
+  /* Race course rating */
+  .course.fast { color: var(--go); }
+  .course.slow { color: var(--stop); }
+  .course.typical { color: var(--dawn); }
+  .rows .v .course { font-weight: 600; letter-spacing: 0.04em; }
+
+  /* Storm / front callouts */
+  .flags { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .flags:empty { display: none; }
+  .flag {
+    border-left: 3px solid var(--partial);
+    background: rgba(255, 165, 0, 0.1);
+    color: var(--fog);
+    font-size: 13px;
+    line-height: 1.45;
+    padding: 8px 12px;
+    border-radius: 0 6px 6px 0;
+  }
+  .flag strong { color: var(--partial); font-weight: 600; }
+
+  /* ---------- 5-day forecast ---------- */
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dawn);
+    text-align: center;
+    margin: 28px 0 12px;
+  }
+
+  .forecast { display: grid; grid-template-columns: 1fr; gap: 12px; }
+
+  .day {
+    background: var(--ink-2);
+    border-radius: 12px;
+    border-top: 3px solid var(--mist);
+    padding: 14px 14px 12px;
+    min-width: 0;
+  }
+  .day.has-flag { border-top-color: var(--partial); }
+
+  .day-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .day-name {
+    font-family: 'Bebas Neue', 'Inter', sans-serif;
+    font-size: 26px;
+    letter-spacing: 0.03em;
+    color: var(--fog);
+  }
+  .day-date { font-size: 12px; color: var(--mist); }
+
+  .rows { list-style: none; margin: 8px 0 0; padding: 0; }
+  .rows li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+    padding: 5px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .rows li:first-child { border-top: 0; }
+  .rows .k { color: var(--mist); flex: none; }
+  .rows .v { color: var(--fog); text-align: right; font-weight: 500; min-width: 0; }
+  .rows .v small { display: block; font-weight: 400; color: var(--mist); font-size: 11px; }
+
+  .day .flags { margin-top: 10px; }
+  .day .flag { font-size: 12px; padding: 6px 10px; }
+
+  .note {
+    text-align: center;
+    font-size: 12px;
+    color: var(--mist);
+    margin-top: 24px;
+    line-height: 1.6;
+  }
+  .note.error { color: var(--stop); }
+  .note a { color: var(--mist); }
+
+  @media (min-width: 560px) {
+    header, .horizon, main { max-width: 960px; }
+    .today-card { padding: 36px 32px 32px; }
+    .label, .date { font-size: 22px; }
+    .window-note { font-size: 14px; }
+    .stat-value { font-size: 44px; }
+    .forecast { grid-template-columns: repeat(2, 1fr); }
+
+    /* Tablet: four boxes in a 2x2, map full width underneath */
+    .today-grid {
+      grid-template-columns: 1fr 1fr;
+      grid-template-areas: "temp course" "precip flow" "map map";
+      gap: 14px;
+      margin-top: 26px;
+    }
+    .box { padding: 18px 18px 16px; }
+    .box-map { min-height: 380px; padding: 0; }
+  }
+
+  @media (min-width: 900px) {
+    /* Desktop: matches the sketch, map tall on the right */
+    .today-grid {
+      grid-template-columns: 1fr 1fr 1.25fr;
+      grid-template-areas: "temp course map" "precip flow map";
+    }
+    .box-map { min-height: 460px; }
+    .forecast { grid-template-columns: repeat(5, 1fr); }
+    .rows li { flex-direction: column; gap: 0; }
+    .rows .v { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+  <header>
+    <p class="eyebrow">Whitman Rowing</p>
+    <h1>PRACTICE WEATHER <span style="font-size:12px;color:var(--partial);letter-spacing:.1em;vertical-align:middle">TEST</span></h1>
+    <p class="sub">Georgetown waterfront &middot; 3&ndash;6 PM Eastern</p>
+  </header>
+
+  <div class="horizon" aria-hidden="true"></div>
+
+  <main>
+    <section class="today-card" id="today-card" aria-live="polite">
+      <div class="card-head">
+        <span class="label">Today</span>
+        <span class="date" id="today-date"></span>
+        <span class="window-note" id="today-window-note"></span>
+      </div>
+      <div class="today-grid">
+        <div class="box box-temp" id="box-temp"></div>
+        <div class="box box-precip" id="box-precip"></div>
+        <div class="box box-map">
+          <div class="wind-map" id="wind-map" role="img" aria-label="Map of the Potomac by Thompson Boat Center with animated wind"></div>
+          <canvas class="wind-canvas" id="wind-canvas" aria-hidden="true"></canvas>
+          <div class="map-overlay" id="map-overlay"></div>
+        </div>
+        <div class="box box-course" id="box-course"></div>
+        <div class="box box-flow" id="box-flow"></div>
+      </div>
+    </section>
+
+    <h2 class="section-title">Next 5 days &middot; 3&ndash;6 PM</h2>
+    <div class="forecast" id="forecast"></div>
+
+    <p class="note" id="note">Loading forecast&hellip;</p>
+  </main>
+
+<script>
+  // ---------------------------------------------------------------
+  // CONFIG
+  // ---------------------------------------------------------------
+  const LAT = 38.9015, LON = -77.0600;   // Georgetown waterfront
+  const TIDE_STATION = '8594900';        // NOAA: Washington, DC (Potomac River)
+  const USGS_SITE = '01646500';          // USGS: Potomac River near Wash, DC Little Falls
+  const NWPS_GAUGE = 'BRKM2';            // NWS river forecast point for the same gauge
+  const TZ = 'America/New_York';
+  const WINDOW_START = 15, WINDOW_END = 18;   // 3 PM to 6 PM
+  const FORECAST_DAYS = 5;
+  const REFRESH_MINUTES = 15;
+
+  // Race course: always rowed downstream, start -> finish
+  const COURSE_START  = [38.903394617433456, -77.08442775640597];
+  const COURSE_FINISH = [38.8999463567322,   -77.0613538203245];
+
+  // Course model. These are physics-based estimates, not calibrated to race
+  // results yet; adjust them here as you learn how the course actually plays.
+  const MODEL = {
+    boatSpeed: 2000 / 375, // m/s: an eight rowing 6:15 for 2K in flat, calm water
+    aeroShare: 0.08,       // share of a crew's effort spent pushing through still air
+    channelArea: 1800,     // m²: rough river cross-section along the course
+    tidePeak: 0.15,        // m/s: tidal current at mid-ebb / mid-flood
+    crossFree: 8,          // mph of crosswind before it starts costing time
+    crossCost: 0.4,        // seconds per mph of crosswind above that
+    gustFree: 20,          // mph peak gust before chop starts costing time
+    gustCost: 0.3,         // seconds per mph of gust above that
+    band: 1.25             // seconds per 500 m either side of a typical day that still counts as Typical
+  };
+
+  // Median monthly flow at Little Falls (USGS 01646500), 1996–2025, Jan..Dec, in cfs.
+  // A "typical" day = this month's median flow, no wind, slack tide.
+  const MEDIAN_FLOW = [12360, 14360, 19020, 16890, 17505, 8733, 3823, 3156, 2518, 4177, 5073, 8492];
+  // ---------------------------------------------------------------
+
+  // ---------- Time helpers (everything is pinned to Eastern) ----------
+
+  const etParts = (ms) => {
+    const p = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: TZ, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+    }).formatToParts(new Date(ms)).forEach(x => { p[x.type] = x.value; });
+    return p;
+  };
+
+  // "YYYY-MM-DD" for an instant, in Eastern time
+  const etKey = (ms) => { const p = etParts(ms); return `${p.year}-${p.month}-${p.day}`; };
+
+  // "YYYY-MM-DD HH:MM" for an instant, in Eastern time (sorts correctly as text)
+  const etStamp = (ms) => { const p = etParts(ms); return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`; };
+
+  const addDays = (key, n) => {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+  };
+
+  // Eastern wall-clock time on a given date -> UTC milliseconds
+  const etToMs = (key, h, min = 0) => {
+    const [y, m, d] = key.split('-').map(Number);
+    const guess = Date.UTC(y, m - 1, d, h, min);
+    const p = etParts(guess);
+    const asIfUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute);
+    return guess + (guess - asIfUtc);
+  };
+
+  const dayLabel = (key, opts) =>
+    new Date(key + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', ...opts });
+
+  // "15:31" -> "3:31 PM"
+  const clock = (hhmm) => {
+    let [h, m] = hhmm.split(':').map(Number);
+    const ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${String(m).padStart(2, '0')} ${ap}`;
+  };
+
+  // ---------- Small math helpers ----------
+
+  const avg = (a) => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
+  const max = (a) => a.length ? Math.max(...a) : null;
+  const clean = (a) => a.filter(x => typeof x === 'number' && !isNaN(x));
+
+  const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  const compass = (deg) => COMPASS[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+
+  // Average wind direction as a vector (so 350° and 10° average to N, not S),
+  // weighted by speed so a calm hour doesn't swing the result.
+  const avgDirection = (dirs, speeds) => {
+    let x = 0, y = 0;
+    dirs.forEach((d, i) => {
+      const w = speeds[i] || 0.1;
+      x += Math.sin(d * Math.PI / 180) * w;
+      y += Math.cos(d * Math.PI / 180) * w;
+    });
+    if (!x && !y) return null;
+    return (Math.atan2(x, y) * 180 / Math.PI + 360) % 360;
+  };
+
+  const angleDiff = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+  const uvLabel = (uv) => uv < 3 ? 'Low' : uv < 6 ? 'Moderate' : uv < 8 ? 'High' : uv < 11 ? 'Very high' : 'Extreme';
+
+  const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // ---------- Data sources ----------
+
+  async function getJSON(url) {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status + ' from ' + new URL(url).host);
+    return r.json();
+  }
+
+  // Hourly weather (Open-Meteo, which blends NOAA's HRRR/GFS models for the US)
+  function loadWeather() {
+    const vars = 'temperature_2m,precipitation_probability,precipitation,uv_index,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code';
+    return getJSON('https://api.open-meteo.com/v1/forecast'
+      + `?latitude=${LAT}&longitude=${LON}&hourly=${vars}`
+      + '&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch'
+      + `&timezone=${encodeURIComponent(TZ)}&forecast_days=${FORECAST_DAYS + 1}`);
+  }
+
+  // High/low tide predictions (NOAA CO-OPS), in local time
+  function loadTides(todayKey) {
+    const start = addDays(todayKey, -1).replace(/-/g, '');
+    const end = addDays(todayKey, FORECAST_DAYS + 1).replace(/-/g, '');
+    return getJSON('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter'
+      + `?product=predictions&station=${TIDE_STATION}&begin_date=${start}&end_date=${end}`
+      + '&datum=MLLW&interval=hilo&units=english&time_zone=lst_ldt&format=json&application=iswhitmanrowingtoday');
+  }
+
+  // Latest river flow reading (USGS Water Data API, with the legacy service as backup)
+  async function loadRiverNow() {
+    try {
+      const j = await getJSON('https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-continuous/items'
+        + `?f=json&monitoring_location_id=USGS-${USGS_SITE}&parameter_code=00060`);
+      const p = j.features[0].properties;
+      return { cfs: Number(p.value), ms: Date.parse(p.time) };
+    } catch (e) {
+      const j = await getJSON('https://waterservices.usgs.gov/nwis/iv/'
+        + `?format=json&sites=${USGS_SITE}&parameterCd=00060&siteStatus=all`);
+      const v = j.value.timeSeries[0].values[0].value.slice(-1)[0];
+      return { cfs: Number(v.value), ms: Date.parse(v.dateTime) };
+    }
+  }
+
+  // River flow forecast (NWS Middle Atlantic River Forecast Center via NWPS)
+  async function loadRiverForecast() {
+    const j = await getJSON(`https://api.water.noaa.gov/nwps/v1/gauges/${NWPS_GAUGE}/stageflow`);
+    const toCfs = (pt, units) => units === 'kcfs' ? pt.secondary * 1000 : pt.secondary;
+    const pts = (j.forecast && j.forecast.data || [])
+      .filter(pt => typeof pt.secondary === 'number' && pt.secondary >= 0)
+      .map(pt => ({ ms: Date.parse(pt.validTime), cfs: toCfs(pt, j.forecast.secondaryUnits) }))
+      .sort((a, b) => a.ms - b.ms);
+    return pts;
+  }
+
+  // NWS text forecast + active alerts, used only for the storm / front notes
+  async function loadNws() {
+    const point = await getJSON(`https://api.weather.gov/points/${LAT},${LON}`);
+    const [fc, alerts] = await Promise.all([
+      getJSON(point.properties.forecast),
+      getJSON(`https://api.weather.gov/alerts/active?point=${LAT},${LON}`).catch(() => ({ features: [] }))
+    ]);
+    return { periods: fc.properties.periods, alerts: alerts.features || [] };
+  }
+
+  // ---------- Per-day summaries ----------
+
+  // Averages over the hours 3, 4, 5 and 6 PM. Rain amount uses the hours
+  // ending 4, 5 and 6 PM (each hourly value is the total for the hour before).
+  function summarizeWeather(wx, key) {
+    const h = wx.hourly;
+    const idx = [], rainIdx = [];
+    h.time.forEach((t, i) => {
+      if (t.slice(0, 10) !== key) return;
+      const hr = Number(t.slice(11, 13));
+      if (hr >= WINDOW_START && hr <= WINDOW_END) idx.push(i);
+      if (hr > WINDOW_START && hr <= WINDOW_END) rainIdx.push(i);
+    });
+    if (!idx.length) return null;
+    const pick = (name, list = idx) => clean(list.map(i => h[name][i]));
+
+    const temps = pick('temperature_2m');
+    const speeds = pick('wind_speed_10m');
+    const dirs = pick('wind_direction_10m');
+    const codes = pick('weather_code');
+
+    return {
+      temp: avg(temps),
+      tempFirst: temps[0], tempLast: temps[temps.length - 1],
+      precipChance: max(pick('precipitation_probability')),
+      precipAmount: pick('precipitation', rainIdx).reduce((s, x) => s + x, 0),
+      uv: avg(pick('uv_index')),
+      wind: avg(speeds),
+      gust: max(pick('wind_gusts_10m')),
+      gustAvg: avg(pick('wind_gusts_10m')),
+      dir: avgDirection(dirs, speeds),
+      dirFirst: dirs[0], dirLast: dirs[dirs.length - 1],
+      speedFirst: speeds[0], speedLast: speeds[speeds.length - 1],
+      thunder: codes.some(c => c >= 95),
+      heavyRain: codes.some(c => c === 65 || c === 82)
+    };
+  }
+
+  // Which way the water is moving during practice. Tide predictions are
+  // water level at the Washington, DC station: rising = flood (upstream),
+  // falling = ebb (downstream).
+  function summarizeTide(tides, key) {
+    const ev = tides.map(t => ({ stamp: t.t, type: t.type, ft: Number(t.v) }));
+    const start = `${key} ${String(WINDOW_START).padStart(2, '0')}:00`;
+    const end = `${key} ${String(WINDOW_END).padStart(2, '0')}:00`;
+
+    const next = ev.find(e => e.stamp >= start);
+    if (!next) return null;
+    const turnsInWindow = ev.filter(e => e.stamp >= start && e.stamp <= end);
+
+    const rising = next.type === 'H';
+    const name = (e) => (e.type === 'H' ? 'High' : 'Low');
+    const sameDay = next.stamp.slice(0, 10) === key;
+    const when = clock(next.stamp.slice(11)) + (sameDay ? '' : ' ' + dayLabel(next.stamp.slice(0, 10), { weekday: 'short' }));
+
+    let flow;
+    if (turnsInWindow.length === 0) {
+      flow = rising ? 'Rising (incoming) all practice' : 'Falling (outgoing) all practice';
+    } else {
+      const t = turnsInWindow[0];
+      flow = (rising ? 'Rising' : 'Falling') + ' until ' + clock(t.stamp.slice(11))
+        + ', then ' + (rising ? 'falling' : 'rising');
+      if (turnsInWindow.length > 1) flow += ' again';
+    }
+
+    return { headline: `${name(next)} @ ${when}`, short: name(next) + ' ' + when, flow, rising };
+  }
+
+  // Linear interpolation of the river forecast at the middle of the window.
+  function riverAt(points, ms) {
+    if (!points.length) return null;
+    if (ms < points[0].ms || ms > points[points.length - 1].ms) {
+      // Allow a little slack past either end of the forecast (6 hours)
+      const nearest = ms < points[0].ms ? points[0] : points[points.length - 1];
+      return Math.abs(nearest.ms - ms) <= 6 * 3600e3 ? nearest.cfs : null;
+    }
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1], b = points[i];
+      if (ms <= b.ms) return a.cfs + (b.cfs - a.cfs) * (ms - a.ms) / (b.ms - a.ms || 1);
+    }
+    return null;
+  }
+
+  // Storm / front notes for a day's practice window.
+  function flagsFor(key, wx, nws) {
+    const flags = [];
+    const winStart = etToMs(key, WINDOW_START), winEnd = etToMs(key, WINDOW_END);
+
+    if (nws) {
+      // Active NWS watches/warnings/advisories that overlap the window
+      nws.alerts.forEach(a => {
+        const p = a.properties;
+        const on = Date.parse(p.onset || p.effective);
+        const off = Date.parse(p.ends || p.expires);
+        if (on <= winEnd && (isNaN(off) || off >= winStart)) {
+          flags.push(`<strong>${esc(p.event)}</strong> in effect`);
+        }
+      });
+
+      // The NWS daytime forecast for that date, if it mentions storms or a front
+      const period = nws.periods.find(p => p.isDaytime && p.startTime.slice(0, 10) === key);
+      if (period) {
+        const hits = period.detailedForecast
+          .split(/(?<=\.)\s+/)
+          .filter(s => /thunder|severe|cold front|warm front|\bfront\b|strong storm|damaging/i.test(s));
+        if (hits.length) flags.push(`<strong>NWS:</strong> ${esc(hits.join(' '))}`);
+      }
+    }
+
+    if (wx) {
+      if (wx.thunder) flags.push('<strong>Thunderstorms</strong> in the model forecast for 3&ndash;6 PM');
+      else if (wx.heavyRain) flags.push('<strong>Heavy rain</strong> in the model forecast for 3&ndash;6 PM');
+
+      // Signs of a front passing during practice: a sharp temperature drop,
+      // or a big wind shift with the wind picking up.
+      const drop = wx.tempFirst - wx.tempLast;
+      const shift = (wx.dirFirst != null && wx.dirLast != null) ? angleDiff(wx.dirFirst, wx.dirLast) : 0;
+      if (drop >= 7) {
+        flags.push(`<strong>Possible front:</strong> temperature drops about ${Math.round(drop)}&deg; between 3 and 6 PM`);
+      } else if (shift >= 90 && wx.speedLast >= 8 && wx.speedLast > wx.speedFirst) {
+        flags.push(`<strong>Possible front:</strong> wind shifts to ${compass(wx.dirLast)} and picks up to ${Math.round(wx.speedLast)} mph`);
+      }
+    }
+    return flags;
+  }
+
+  // ---------- Race course model ----------
+
+  const toRad = (d) => d * Math.PI / 180;
+
+  // Heading (degrees true) and length (meters) of the course
+  const COURSE = (() => {
+    const [la1, lo1] = COURSE_START.map(toRad), [la2, lo2] = COURSE_FINISH.map(toRad);
+    const y = Math.sin(lo2 - lo1) * Math.cos(la2);
+    const x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(lo2 - lo1);
+    const a = Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin((lo2 - lo1) / 2) ** 2;
+    return {
+      bearing: (Math.atan2(y, x) * 180 / Math.PI + 360) % 360,
+      meters: 2000   // race distance; the coordinates above only set the heading
+    };
+  })();
+
+  // How hard the tide pushes during practice, from -1 (mid-flood, against us)
+  // to +1 (mid-ebb, with us). Tidal current is strongest halfway between a high
+  // and a low and near zero at the turn, so each 15-minute sample is weighted
+  // by where it sits between the surrounding tide events.
+  function tideFactor(tides, key) {
+    const mins = (stamp) => Date.parse(stamp.replace(' ', 'T') + 'Z') / 60000;
+    const ev = tides.map(t => ({ m: mins(t.t), type: t.type }));
+    const samples = [];
+    for (let h = WINDOW_START * 60; h <= WINDOW_END * 60; h += 15) {
+      const m = mins(`${key} ${String(Math.floor(h / 60)).padStart(2, '0')}:${String(h % 60).padStart(2, '0')}`);
+      const prev = [...ev].reverse().find(e => e.m <= m), next = ev.find(e => e.m > m);
+      if (!prev || !next) continue;
+      const frac = (m - prev.m) / (next.m - prev.m);
+      samples.push((next.type === 'L' ? 1 : -1) * Math.sin(Math.PI * frac));
+    }
+    return samples.length ? avg(samples) : null;
+  }
+
+  // Boat speed through the water (m/s) with a wind component along the course
+  // (m/s, positive = tailwind), holding the crew's power constant.
+  function boatSpeed(windAlong) {
+    const v0 = MODEL.boatSpeed, a = MODEL.aeroShare, w = windAlong / v0;
+    const power = (x) => (1 - a) * x ** 3 + a * x * (x - w) * Math.abs(x - w);
+    let lo = 0.5, hi = 1.6;
+    for (let i = 0; i < 50; i++) { const mid = (lo + hi) / 2; if (power(mid) < 1) lo = mid; else hi = mid; }
+    return v0 * (lo + hi) / 2;
+  }
+
+  // Seconds for the course under the given conditions
+  function courseSeconds({ windAlong = 0, cross = 0, gust = 0, flow, tide = 0 }) {
+    const current = (flow / 35.3147) / MODEL.channelArea + MODEL.tidePeak * tide;
+    let t = COURSE.meters / (boatSpeed(windAlong) + current);
+    t += Math.max(0, cross - MODEL.crossFree) * MODEL.crossCost;
+    t += Math.max(0, gust - MODEL.gustFree) * MODEL.gustCost;
+    return t;
+  }
+
+  // Fast / Typical / Slow versus a typical day for this month
+  function coursePrediction(w, tide, flow, key) {
+    if (!w || w.dir == null) return null;
+    const month = Number(key.slice(5, 7));
+    const median = MEDIAN_FLOW[month - 1];
+    const q = flow != null ? flow : median;
+    const tf = tide != null ? tide : 0;
+
+    const rel = toRad((w.dir + 180) % 360 - COURSE.bearing);   // wind blows TOWARD dir+180
+    const alongMph = w.wind * Math.cos(rel);
+    const crossMph = Math.abs(w.wind * Math.sin(rel));
+    const windMs = alongMph * 0.44704;
+
+    const typical = courseSeconds({ flow: median });
+    const diff = courseSeconds({ windAlong: windMs, cross: crossMph, gust: w.gust, flow: q, tide: tf }) - typical;
+
+    // What each factor contributes on its own (negative = faster)
+    const parts = [
+      { s: courseSeconds({ windAlong: windMs, cross: crossMph, gust: w.gust, flow: median }) - typical,
+        text: alongMph >= 1 ? `${Math.round(alongMph)} mph tailwind`
+            : alongMph <= -1 ? `${Math.round(-alongMph)} mph headwind`
+            : `${Math.round(crossMph)} mph crosswind` },
+      { s: courseSeconds({ flow: median, tide: tf }) - typical,
+        text: tf > 0 ? 'outgoing tide' : 'incoming tide' },
+      { s: courseSeconds({ flow: q }) - typical,
+        text: q >= median ? 'above-normal river flow' : 'below-normal river flow' }
+    ].filter(p => Math.abs(p.s) >= 1.5).sort((a, b) => Math.abs(b.s) - Math.abs(a.s));
+
+    // Differences are reported per 500 m split, the way crews read them
+    const perSplit = (d) => d * 500 / COURSE.meters;
+    const splitDiff = perSplit(diff);
+    const label = splitDiff <= -MODEL.band ? 'FAST' : splitDiff >= MODEL.band ? 'SLOW' : 'TYPICAL';
+    const helps = parts.filter(p => p.s < 0).map(p => p.text);
+    const hurts = parts.filter(p => p.s > 0).map(p => p.text);
+    const why = [
+      helps.length ? cap(helps.join(', ')) + ' help' + (helps.length === 1 ? 's' : '') : '',
+      hurts.length ? (helps.length ? hurts.join(', ') : cap(hurts.join(', '))) + ' slow' + (hurts.length === 1 ? 's' : '') + ' it' : ''
+    ].filter(Boolean).join('; ') || 'Close to normal conditions';
+
+    // Versus flat, still water with no wind (a typical Potomac day is already faster)
+    const flat = COURSE.meters / MODEL.boatSpeed;
+    const flatDiff = courseSeconds({ windAlong: windMs, cross: crossMph, gust: w.gust, flow: q, tide: tf }) - flat;
+    // "1.4 s/500 faster", rounded to a tenth
+    const split = (d) => { const v = Math.abs(perSplit(d)); return v < 0.05 ? null : `${v.toFixed(1)} s/500 ${d < 0 ? 'faster' : 'slower'}`; };
+    const vsFlat = split(flatDiff) ? `${split(flatDiff)} than flatwater` : 'Even with flatwater';
+    const vs = split(diff)
+      ? `${split(diff)} than a typical ${new Date(key + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long' })} day`
+      : 'About the same as a typical day';
+
+    // Short forms for the Today box's label / value rows
+    const shortSecs = (d) => split(d) || 'Even';
+    const shortText = (t) => cap(t.replace('above-normal river flow', 'high flow').replace('below-normal river flow', 'low flow'));
+    const monthShort = new Date(key + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short' });
+    const short = {
+      vsTypical: shortSecs(diff), vsFlat: shortSecs(flatDiff), month: monthShort,
+      // One factor per line, so nothing wraps mid-phrase
+      helping: parts.filter(p => p.s < 0).map(p => shortText(p.text)).join('<br>'),
+      slowing: parts.filter(p => p.s > 0).map(p => shortText(p.text)).join('<br>')
+    };
+
+    return { label, diff, vs, vsFlat, why, short, cls: label.toLowerCase() };
+  }
+
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // ---------- Rendering ----------
+
+  // Arrow points the way the wind is blowing TO (downwind)
+  const arrowSvg = (fromDeg) =>
+    `<svg class="arrow" viewBox="0 0 24 24" aria-hidden="true" style="transform: rotate(${(fromDeg + 180) % 360}deg)">`
+    + '<path d="M12 2 L19 20 L12 16 L5 20 Z" fill="currentColor"/></svg>';
+
+  const DASH = '&mdash;';
+
+  const metric = (label, value, detail = '') =>
+    `<div class="metric"><span class="stat-label">${label}</span>`
+    + `<span class="stat-value">${value}</span>`
+    + (detail ? `<span class="stat-detail">${detail}</span>` : '') + '</div>';
+
+  function renderToday(w, tide, riverNow, riverFc, course, flags) {
+    const set = (id, html) => { document.getElementById(id).innerHTML = html; };
+
+    // Temp & UV
+    set('box-temp', '<span class="box-title">Temp &amp; UV</span><div class="pair">'
+      + metric('Temperature', w ? `${Math.round(w.temp)}<span class="unit">&deg;F</span>` : DASH,
+          w ? `${Math.round(w.tempFirst)}&deg; at 3 PM &rarr; ${Math.round(w.tempLast)}&deg; at 6 PM` : '')
+      + metric('UV Index', w ? `${Math.round(w.uv)}` : DASH, w ? uvLabel(w.uv) : '')
+      + '</div>');
+
+    // Precipitation & advisories (NWS alerts plus storm / front notes)
+    const precip = document.getElementById('box-precip');
+    precip.classList.toggle('has-flag', flags.length > 0);
+    set('box-precip', '<span class="box-title">Precipitation &amp; Advisories</span>'
+      + metric('Chance of Rain', w ? `${Math.round(w.precipChance)}<span class="unit">%</span>` : DASH,
+          w ? (w.precipAmount >= 0.01 ? `About ${w.precipAmount.toFixed(2)} in, 3&ndash;6 PM` : 'No measurable rain expected') : '')
+      + (flags.length
+          ? `<div class="flags">${flags.map(f => `<div class="flag">${f}</div>`).join('')}</div>`
+          : '<span class="no-alerts">No NOAA advisories or storm signals for 3&ndash;6 PM</span>'));
+
+    // Race course
+    const box = document.getElementById('box-course');
+    box.classList.remove('is-fast', 'is-slow', 'is-typical');
+    if (course) box.classList.add('is-' + course.cls);
+    const fact = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+    set('box-course', '<span class="box-title">Race Course Conditions</span>'
+      + metric('Downstream 2K', course ? `<span class="course ${course.cls}">${course.label}</span>` : DASH,
+          course ? '' : 'Needs the wind forecast')
+      + (course ? '<dl class="facts">'
+          + fact(`vs. typical ${course.short.month}`, course.short.vsTypical)
+          + fact('vs. flatwater', course.short.vsFlat)
+          + (course.short.helping ? fact('Helping', course.short.helping) : '')
+          + (course.short.slowing ? fact('Slowing', course.short.slowing) : '')
+          + (!course.short.helping && !course.short.slowing ? fact('Conditions', 'Close to normal') : '')
+          + '</dl>' : ''));
+
+    // Tide & flow
+    const riverDetail = riverNow
+      ? `USGS Little Falls &middot; ${clock(etStamp(riverNow.ms).slice(11))}`
+        + (riverFc != null ? `<br>Forecast 4:30 PM: ${fmtInt(riverFc)}` : '')
+      : (riverFc != null ? 'NWS forecast for 4:30 PM' : 'Unavailable');
+    const riverValue = riverNow ? riverNow.cfs : riverFc;
+    set('box-flow', '<span class="box-title">Tide &amp; Flow</span><div class="pair">'
+      + metric('Next Tide', tide ? tide.short : DASH, tide ? tide.flow : 'Unavailable')
+      + metric('River Flow', riverValue != null ? `${fmtInt(riverValue)}<span class="unit">cfs</span>` : DASH, riverDetail)
+      + '</div>');
+
+    // Map overlay
+    set('map-overlay', w && w.dir != null
+      ? metric('Wind, 3&ndash;6 PM', `${arrowSvg(w.dir)}${Math.round(w.wind)}<span class="unit">/</span>${Math.round(w.gust)}<span class="unit">mph</span>`,
+          `Sustained ${Math.round(w.wind)} &middot; gusts ${Math.round(w.gust)}<br>From the ${compass(w.dir)} (${Math.round(w.dir)}&deg;)`)
+      : metric('Wind', DASH, 'Unavailable'));
+    WindMap.setWind(w && w.dir != null ? { dir: w.dir, mph: w.wind, gust: w.gust } : null);
+  }
+
+  // ---------- Map with windy.com-style wind streaks ----------
+  // The forecast is one wind for the whole area, so every streak moves the
+  // same way; speed and density scale with the wind.
+  const WindMap = (() => {
+    const TBC = [38.900527, -77.0583371];   // Thompson Boat Center
+    let map = null, canvas, ctx, particles = [], wind = null, raf = null, w = 0, h = 0, dpr = 1;
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function frame() {
+      // Place Thompson's on the right, a bit above middle (80% across, 38% down).
+      // The river runs up-left from there to Key Bridge and Three Sisters and down
+      // past Roosevelt Island, so this keeps most of the frame on the water.
+      // Zoom so about 2.4 km shows to the left of the boathouse at any box size.
+      if (!map) return;
+      const box = map.getContainer();
+      const bw = box.clientWidth, bh = box.clientHeight;
+      if (!bw || !bh) return;
+      const metersPerPxAtZ0 = 156543.03 * Math.cos(TBC[0] * Math.PI / 180);
+      const zoom = Math.log2((0.8 * bw * metersPerPxAtZ0) / 2400);
+      map.setView(TBC, Math.min(17, Math.max(12.5, zoom)), { animate: false });
+      map.panBy([-0.3 * bw, 0.12 * bh], { animate: false });
+    }
+
+    function sizeCanvas() {
+      const r = canvas.getBoundingClientRect();
+      dpr = window.devicePixelRatio || 1;
+      w = r.width; h = r.height;
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      seed();
+    }
+
+    function seed() {
+      const count = wind ? Math.round(Math.min(900, (w * h) / 900) * (0.5 + Math.min(wind.mph, 20) / 40)) : 0;
+      particles = Array.from({ length: count }, () => spawn(true));
+    }
+
+    function spawn(anyAge) {
+      return { x: Math.random() * w, y: Math.random() * h, age: anyAge ? Math.random() * 80 : 0, life: 50 + Math.random() * 60 };
+    }
+
+    function tick() {
+      raf = requestAnimationFrame(tick);
+      if (!wind || !w) return;
+      // Fade the previous frame so streaks leave trails
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'source-over';
+
+      const toward = (wind.dir + 180) * Math.PI / 180;     // direction the air moves
+      const speed = (0.5 + Math.min(wind.mph, 30) * 0.14) * 0.75;   // px per frame (slowed 25%)
+      const vx = Math.sin(toward) * speed, vy = -Math.cos(toward) * speed;
+      const gustiness = Math.max(0, (wind.gust - wind.mph) / Math.max(wind.mph, 1));
+
+      ctx.lineWidth = 1.4;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(230, 242, 252, 0.85)';
+      ctx.beginPath();
+      for (const p of particles) {
+        // A little wobble, more on gusty days
+        const jitter = 1 + (Math.random() - 0.5) * 0.6 * Math.min(gustiness, 1);
+        const nx = p.x + vx * jitter, ny = p.y + vy * jitter;
+        ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny);
+        p.x = nx; p.y = ny; p.age++;
+        if (p.age > p.life || p.x < -5 || p.y < -5 || p.x > w + 5 || p.y > h + 5) Object.assign(p, spawn(false));
+      }
+      ctx.stroke();
+    }
+
+    function drawStatic() {
+      // Reduced motion: a still grid of arrows instead of moving streaks
+      ctx.clearRect(0, 0, w, h);
+      if (!wind) return;
+      const toward = (wind.dir + 180) * Math.PI / 180;
+      ctx.strokeStyle = 'rgba(160, 205, 235, 0.7)'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 1.5;
+      for (let y = 30; y < h; y += 60) for (let x = 30; x < w; x += 60) {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(toward);
+        ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(0, -12); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(-5, -6); ctx.lineTo(5, -6); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function init() {
+      if (map || !window.L) return;
+      map = L.map('wind-map', {
+        zoomControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+        boxZoom: false, keyboard: false, touchZoom: false, tap: false, zoomSnap: 0
+      });
+      // Esri's Dark Gray canvas (no key needed), tinted with the CSS above
+      L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19, maxNativeZoom: 16,
+        attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'
+      }).addTo(map);
+      // Boathouses: [lat, lon], label, which side of the dot the label sits on
+      [
+        [TBC, 'Thompson Boat Center', 'left', [-6, 0]],
+        [[38.9041311, -77.0701648], 'Potomac Boat Club', 'top', [0, -6]]
+      ].forEach(([pos, name, dir, offset]) => {
+        L.circleMarker(pos, { radius: 5, color: '#0b1e2d', weight: 2, fillColor: '#74b0da', fillOpacity: 1 })
+          .bindTooltip(name, { permanent: true, direction: dir, offset, className: 'tbc-label' })
+          .addTo(map);
+      });
+
+      canvas = document.getElementById('wind-canvas');
+      ctx = canvas.getContext('2d');
+      frame(); sizeCanvas();
+
+      let t;
+      const onResize = () => { clearTimeout(t); t = setTimeout(() => { map.invalidateSize(); frame(); sizeCanvas(); if (reduceMotion) drawStatic(); }, 150); };
+      window.addEventListener('resize', onResize);
+      if (window.ResizeObserver) new ResizeObserver(onResize).observe(map.getContainer());
+      if (!reduceMotion) tick();
+    }
+
+    return {
+      init,
+      setWind(next) {
+        init();
+        wind = next;
+        if (!canvas) return;
+        seed();
+        if (reduceMotion) drawStatic();
+      }
+    };
+  })();
+
+  function dayCard(key, w, tide, riverFc, flags, course, riverHeld) {
+    const row = (k, v, small = '') => `<li><span class="k">${k}</span><span class="v">${v}${small ? `<small>${small}</small>` : ''}</span></li>`;
+    return `<article class="day${flags.length ? ' has-flag' : ''}">
+      <div class="day-head">
+        <span class="day-name">${dayLabel(key, { weekday: 'long' })}</span>
+        <span class="day-date">${dayLabel(key, { month: 'short', day: 'numeric' })}</span>
+      </div>
+      <ul class="rows">
+        ${row('Temp', w ? `${Math.round(w.temp)}&deg;F` : DASH)}
+        ${row('Precip', w ? `${Math.round(w.precipChance)}%` : DASH, w && w.precipAmount >= 0.01 ? `${w.precipAmount.toFixed(2)} in` : '')}
+        ${row('UV', w ? `${Math.round(w.uv)} &middot; ${uvLabel(w.uv)}` : DASH)}
+        ${row('Wind', w ? `${Math.round(w.wind)} mph` : DASH, w ? `gusts to ${Math.round(w.gust)}` : '')}
+        ${row('Direction', w && w.dir != null ? `${compass(w.dir)} ${arrowSvg(w.dir)}` : DASH)}
+        ${row('Next tide', tide ? tide.headline : DASH, tide ? tide.flow : '')}
+        ${riverFc != null
+          ? row('River', `${fmtInt(riverFc)} cfs <span class="tag">fcst</span>`)
+          : row('River', DASH, 'Beyond NWS river forecast')}
+        ${row('Course', course ? `<span class="course ${course.cls}">${course.label}</span>` : DASH,
+          course ? `${course.vs}. ${course.why}.` + (riverHeld ? ' Flow held at today’s level.' : '') : '')}
+      </ul>
+      <div class="flags">${flags.map(f => `<div class="flag">${f}</div>`).join('')}</div>
+    </article>`;
+  }
+
+  // ---------- Main ----------
+
+  async function run() {
+    const now = Date.now();
+    const todayKey = etKey(now);
+    const keys = Array.from({ length: FORECAST_DAYS + 1 }, (_, i) => addDays(todayKey, i));
+    const note = document.getElementById('note');
+
+    const results = await Promise.allSettled([
+      loadWeather(), loadTides(todayKey), loadRiverNow(), loadRiverForecast(), loadNws()
+    ]);
+    const [wxR, tideR, nowR, fcR, nwsR] = results;
+    const val = (r) => r.status === 'fulfilled' ? r.value : null;
+    const wx = val(wxR), tides = val(tideR), riverNow = val(nowR), riverFc = val(fcR) || [], nws = val(nwsR);
+    results.forEach(r => { if (r.status === 'rejected') console.error(r.reason); });
+
+    const tideList = tides && tides.predictions ? tides.predictions : null;
+
+    const days = keys.map((key, i) => {
+      const w = wx ? summarizeWeather(wx, key) : null;
+      const river = riverAt(riverFc, etToMs(key, 16, 30));
+      // Course flow: today's actual reading, else the NWS forecast, else hold
+      // today's reading for days past the end of the river forecast.
+      let courseFlow = river, riverHeld = false;
+      if (i === 0 && riverNow) courseFlow = riverNow.cfs;
+      else if (courseFlow == null && riverNow) { courseFlow = riverNow.cfs; riverHeld = true; }
+      return {
+        key, w, river, riverHeld,
+        tide: tideList ? summarizeTide(tideList, key) : null,
+        course: coursePrediction(w, tideList ? tideFactor(tideList, key) : null, courseFlow, key),
+        flags: flagsFor(key, w, nws)
+      };
+    });
+
+    // Today
+    const t = days[0];
+    document.getElementById('today-date').textContent = dayLabel(t.key, { weekday: 'long', month: 'long', day: 'numeric' });
+    const nowStamp = etStamp(now);
+    document.getElementById('today-window-note').textContent =
+      nowStamp.slice(11) >= `${WINDOW_END}:00` ? 'Practice window has passed. Showing this afternoon’s forecast.' : '';
+    renderToday(t.w, t.tide, riverNow, t.river, t.course, t.flags);
+
+    // Next 5 days
+    document.getElementById('forecast').innerHTML =
+      days.slice(1).map(d => dayCard(d.key, d.w, d.tide, d.river, d.flags, d.course, d.riverHeld)).join('');
+
+    // Footer
+    const failed = [];
+    if (!wx) failed.push('weather');
+    if (!tideList) failed.push('tides');
+    if (!riverNow && !riverFc.length) failed.push('river flow');
+    if (!nws) failed.push('NWS storm alerts');
+    const updated = clock(nowStamp.slice(11));
+    note.classList.toggle('error', failed.length > 0);
+    note.innerHTML = (failed.length ? `Couldn’t load ${failed.join(', ')} right now. ` : '')
+      + `Updated ${updated}. Temperature, UV, sustained wind and direction are 3&ndash;6 PM averages; gusts are the peak; rain chance is the highest hourly chance and rain amount is the 3&ndash;6 PM total. River forecasts are for 4:30 PM.`
+      + `<br>Race course: ${fmtInt(COURSE.meters)} m downstream, heading ${compass(COURSE.bearing)}. Rated against a typical day for the month (median river flow, no wind, slack tide), which is already faster than flatwater. Splits are per 500 m for an eight; Fast or Slow means at least ${MODEL.band} s/500 different from typical. These are estimates from flow, tide and wind, not yet checked against race results.`
+      + `<br>Sources: Open-Meteo (NOAA models), NWS, NOAA tide station ${TIDE_STATION} (Washington, DC), USGS ${USGS_SITE} and NWS river forecast (Little Falls).`;
+  }
+
+  run().catch(err => {
+    console.error(err);
+    const note = document.getElementById('note');
+    note.textContent = 'Could not load the forecast right now. Try refreshing.';
+    note.classList.add('error');
+  });
+
+  // Keep a phone left open on this page current
+  setInterval(() => run().catch(console.error), REFRESH_MINUTES * 60 * 1000);
+</script>
+
+</body>
+</html>
