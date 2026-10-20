@@ -7,21 +7,22 @@
 <meta name="description" content="Practice weather, tides, river flow and 2K race course conditions for DC-area rowing: Upper and Lower Potomac, Anacostia and Occoquan.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
-  /* Same palette and type as the main page (index.html) */
+  /* DC Area Rowing News (D.A.R.N.) palette, dark: slate and river teal with gold */
   :root {
-    --ink: #0b1e2d;      /* deep river navy - background */
-    --ink-2: #142b3d;    /* card panel */
-    --ink-3: #1b3549;    /* stat tile inside a card */
-    --mist: #93a9b8;     /* muted secondary text */
-    --fog: #eef2f4;      /* primary text on dark */
-    --dawn: #74b0da;     /* blue accent (Pantone 542C) */
-    --go: #00FF00;
-    --stop: #FF0000;
-    --partial: #FFA500;  /* used for storm / front flags */
+    --ink: #121a20;      /* page background, darker DARN slate */
+    --ink-2: #1c2730;    /* card panel, DARN header slate */
+    --ink-3: #173540;    /* box inside a card, DARN deep teal */
+    --mist: #a3b8bf;     /* muted secondary text, from DARN's pale teal */
+    --fog: #f3f5f4;      /* primary text on dark, DARN page white */
+    --dawn: #ffd23f;     /* DARN gold accent */
+    --line: 185, 205, 211; /* pale teal, for hairlines and outlines (rgb) */
+    --go: #3ddc84;       /* fast */
+    --stop: #ff5a5a;     /* slow, errors */
+    --partial: #ff8c42;  /* storm / front flags (orange, kept apart from the gold) */
   }
 
   * { box-sizing: border-box; }
@@ -31,7 +32,7 @@
     min-height: 100vh;
     background: var(--ink);
     color: var(--fog);
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Public Sans', system-ui, sans-serif;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -49,7 +50,7 @@
     margin: 0 0 6px;
   }
 
-  h1 { font-size: 22px; font-weight: 500; margin: 0; color: var(--fog); }
+  h1 { font-size: 24px; font-weight: 800; letter-spacing: 0.02em; margin: 0; color: var(--fog); }
 
   .sub { font-size: 13px; color: var(--mist); margin: 6px 0 0; }
 
@@ -109,10 +110,12 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-family: 'Bebas Neue', 'Inter', sans-serif;
-    font-size: 34px;
-    line-height: 1.1;
-    letter-spacing: 0.02em;
+    font-family: 'Public Sans', sans-serif;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    font-size: 27px;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
     margin-top: 4px;
     color: var(--fog);
     white-space: nowrap;
@@ -133,13 +136,13 @@
 
   .tag {
     display: inline-block;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Public Sans', sans-serif;
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--dawn);
-    border: 1px solid rgba(116, 176, 218, 0.5);
+    border: 1px solid rgba(255, 210, 63, 0.5);
     border-radius: 4px;
     padding: 1px 5px;
     vertical-align: middle;
@@ -193,7 +196,7 @@
     align-items: baseline;
     gap: 12px;
     padding: 6px 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    border-top: 1px solid rgba(var(--line), 0.1);
     font-size: 13px;
   }
   .facts dt { color: var(--mist); flex: none; }
@@ -209,16 +212,16 @@
     padding: 0;
     overflow: hidden;
     min-height: 340px;
-    background: #0d2233;
+    background: #10262e;
   }
   .wind-map, .wind-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .wind-map { background: #0d2233; z-index: 1; }
+  .wind-map { background: #10262e; z-index: 1; }
   .wind-canvas { z-index: 2; pointer-events: none; }
-  /* Tint Esri's dark gray canvas toward the site's navy: river dark, land slate */
-  .wind-map .leaflet-tile-pane { filter: sepia(0.5) hue-rotate(170deg) saturate(1.8) brightness(1.05) contrast(1.1); }
-  .wind-map.leaflet-container { background: #0d2233; font-family: 'Inter', system-ui, sans-serif; }
+  /* Tint Esri's dark gray canvas toward DARN slate-teal: river dark, land slate */
+  .wind-map .leaflet-tile-pane { filter: sepia(0.45) hue-rotate(150deg) saturate(1.4) brightness(1.05) contrast(1.1); }
+  .wind-map.leaflet-container { background: #10262e; font-family: 'Public Sans', system-ui, sans-serif; }
   .wind-map .leaflet-control-attribution {
-    background: rgba(11, 30, 45, 0.75);
+    background: rgba(18, 26, 32, 0.75);
     color: var(--mist);
     font-size: 9px;
   }
@@ -241,15 +244,15 @@
     left: 12px;
     bottom: 46px;   /* clear of the map credits strip, which can wrap to two lines */
     z-index: 3;
-    background: rgba(11, 30, 45, 0.82);
-    border: 1px solid rgba(116, 176, 218, 0.35);
+    background: rgba(18, 26, 32, 0.84);
+    border: 1px solid rgba(var(--line), 0.3);
     border-radius: 8px;
     padding: 10px 12px;
     backdrop-filter: blur(3px);
     pointer-events: none;
     min-width: 150px;
   }
-  .map-overlay .stat-value { font-size: 30px; margin-top: 2px; }
+  .map-overlay .stat-value { font-size: 26px; margin-top: 2px; }
   .map-overlay .stat-detail { font-size: 12px; }
 
   /* Location / time toggles */
@@ -264,17 +267,17 @@
   }
   .seg { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
   .seg button {
-    font: 600 11px/1 'Inter', system-ui, sans-serif;
+    font: 700 11px/1 'Public Sans', system-ui, sans-serif;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--mist);
     background: var(--ink-2);
-    border: 1px solid rgba(116, 176, 218, 0.28);
+    border: 1px solid rgba(var(--line), 0.25);
     border-radius: 999px;
     padding: 8px 13px;
     cursor: pointer;
   }
-  .seg button:hover { color: var(--fog); border-color: rgba(116, 176, 218, 0.6); }
+  .seg button:hover { color: var(--fog); border-color: rgba(var(--line), 0.6); }
   .seg button[aria-pressed="true"] { background: var(--dawn); border-color: var(--dawn); color: var(--ink); }
   .seg button:focus-visible { outline: 2px solid var(--fog); outline-offset: 2px; }
 
@@ -289,7 +292,7 @@
   .flags:empty { display: none; }
   .flag {
     border-left: 3px solid var(--partial);
-    background: rgba(255, 165, 0, 0.1);
+    background: rgba(255, 140, 66, 0.1);
     color: var(--fog);
     font-size: 13px;
     line-height: 1.45;
@@ -322,9 +325,10 @@
 
   .day-head { display: flex; justify-content: space-between; align-items: baseline; }
   .day-name {
-    font-family: 'Bebas Neue', 'Inter', sans-serif;
-    font-size: 26px;
-    letter-spacing: 0.03em;
+    font-family: 'Public Sans', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
     color: var(--fog);
   }
   .day-date { font-size: 12px; color: var(--mist); }
@@ -336,7 +340,7 @@
     gap: 8px;
     font-size: 13px;
     padding: 5px 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid rgba(var(--line), 0.09);
   }
   .rows li:first-child { border-top: 0; }
   .rows .k { color: var(--mist); flex: none; }
@@ -361,7 +365,7 @@
     .today-card { padding: 36px 32px 32px; }
     .label, .date { font-size: 22px; }
     .window-note { font-size: 14px; }
-    .stat-value { font-size: 44px; }
+    .stat-value { font-size: 34px; }
     .forecast { grid-template-columns: repeat(2, 1fr); }
 
     /* Tablet: four boxes in a 2x2, map full width underneath */
@@ -1109,7 +1113,7 @@
       const vx = Math.sin(toward) * speed, vy = -Math.cos(toward) * speed;
       const gustiness = Math.max(0, (wind.gust - wind.mph) / Math.max(wind.mph, 1));
       ctx.lineWidth = 1.4; ctx.lineCap = 'round';
-      ctx.strokeStyle = 'rgba(230, 242, 252, 0.85)';
+      ctx.strokeStyle = 'rgba(243, 245, 244, 0.85)';
       ctx.beginPath();
       for (const p of particles) {
         const jitter = 1 + (Math.random() - 0.5) * 0.6 * Math.min(gustiness, 1);
@@ -1124,7 +1128,7 @@
       ctx.clearRect(0, 0, w, h);
       if (!wind) return;
       const toward = (wind.dir + 180) * Math.PI / 180;
-      ctx.strokeStyle = 'rgba(160, 205, 235, 0.7)'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(185, 205, 211, 0.75)'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 1.5;
       for (let y = 30; y < h; y += 60) for (let x = 30; x < w; x += 60) {
         ctx.save(); ctx.translate(x, y); ctx.rotate(toward);
         ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(0, -12); ctx.stroke();
@@ -1162,7 +1166,7 @@
         loc = next;
         markerLayer.clearLayers();
         loc.markers.forEach(([pos, name, dir, offset]) => {
-          L.circleMarker(pos, { radius: 5, color: '#0b1e2d', weight: 2, fillColor: '#74b0da', fillOpacity: 1 })
+          L.circleMarker(pos, { radius: 5, color: '#121a20', weight: 2, fillColor: '#ffd23f', fillOpacity: 1 })
             .bindTooltip(name, { permanent: true, direction: dir, offset, className: 'tbc-label' })
             .addTo(markerLayer);
         });
