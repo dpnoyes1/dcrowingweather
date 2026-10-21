@@ -315,7 +315,8 @@
   .sheet-note { font-size: 13px; color: var(--mist); line-height: 1.5; margin: 0 0 14px; }
   .sheet-steps { font-size: 14px; line-height: 1.6; margin: 0 0 6px; padding-left: 20px; }
   .practice { background: var(--ink-3); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
-  .practice-row { display: flex; gap: 8px; }
+  .practice-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .practice select[data-f="loc"] { flex-basis: 100%; }
   .practice select {
     flex: 1; min-width: 0; font: 600 14px 'Public Sans', system-ui, sans-serif;
     color: var(--fog); background: var(--ink); border: 1px solid rgba(var(--line), 0.25);
