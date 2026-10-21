@@ -1,0 +1,15 @@
+{
+  "name": "DC Rowing Weather",
+  "short_name": "DC Rowing Weather",
+  "description": "Practice weather, tides, river flow and 2K race course conditions for DC-area rowing.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#121a20",
+  "theme_color": "#121a20",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
